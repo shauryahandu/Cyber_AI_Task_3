@@ -10,7 +10,6 @@ from advanced_feature_engineering_and_selection import extract_super_features
 os.makedirs("eda_plots_augmented", exist_ok=True)
 plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
 plt.rcParams['font.family'] = 'DejaVu Sans'
-print("🚀 Extracting 115 Features for Comprehensive EDA...")
 df_raw = pd.read_csv("data/Augmented_Training_set.csv")
 df_full = extract_super_features(df_raw)
 feat_cols = [c for c in df_full.columns if c != 'label']
@@ -19,15 +18,11 @@ y = df_full['label']
 le = LabelEncoder()
 y_enc = le.fit_transform(y)
 class_names = le.classes_
-print("Computing Mutual Information across all 115 features...")
 mi_scores = mutual_info_classif(X, y_enc, random_state=42)
 df_mi = pd.DataFrame({'Feature': feat_cols, 'Mutual_Information': mi_scores}).sort_values('Mutual_Information', ascending=False)
-print("Computing ExtraTrees Importance across all 115 features...")
 clf = ExtraTreesClassifier(n_estimators=300, max_depth=12, random_state=42)
 clf.fit(X, y_enc)
 df_mi['ExtraTrees_Importance'] = clf.feature_importances_
-print("\n🏆 Top 20 Most Discriminative Features:")
-print(df_mi.head(20).to_string(index=False))
 plt.figure(figsize=(12, 8))
 top_25 = df_mi.head(25).sort_values('Mutual_Information', ascending=True)
 bars = plt.barh(top_25['Feature'], top_25['Mutual_Information'], color='
@@ -38,7 +33,6 @@ plt.grid(True, linestyle='--', alpha=0.5)
 plt.tight_layout()
 plt.savefig('eda_plots_augmented/top_25_features_mutual_info.png', dpi=300)
 plt.close()
-print("✅ Saved eda_plots_augmented/top_25_features_mutual_info.png")
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 sns.boxplot(data=df_full, x='label', y='harmonic_resonance_20ms', ax=axes[0], palette='tab10')
 axes[0].set_title('Multi-Harmonic 20ms Opus Resonance Score by Class', fontsize=12, fontweight='bold', color='
@@ -54,7 +48,6 @@ axes[1].tick_params(axis='x', rotation=45)
 plt.tight_layout()
 plt.savefig('eda_plots_augmented/harmonic_and_curvature_separation.png', dpi=300)
 plt.close()
-print("✅ Saved eda_plots_augmented/harmonic_and_curvature_separation.png")
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 sns.barplot(data=df_full, x='label', y='burst_duty_cycle', ax=axes[0], palette='viridis', ci=None, edgecolor='black')
 axes[0].set_title('Sub-Millisecond Burst Duty Cycle by Class', fontsize=12, fontweight='bold', color='
@@ -69,7 +62,6 @@ axes[1].tick_params(axis='x', rotation=45)
 plt.tight_layout()
 plt.savefig('eda_plots_augmented/duty_cycle_and_entropy.png', dpi=300)
 plt.close()
-print("✅ Saved eda_plots_augmented/duty_cycle_and_entropy.png")
 plt.figure(figsize=(10, 7))
 sns.scatterplot(
     data=df_full,
@@ -87,8 +79,6 @@ plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
 plt.tight_layout()
 plt.savefig('eda_plots_augmented/log_energy_vs_delta_scatter.png', dpi=300)
 plt.close()
-print("✅ Saved eda_plots_augmented/log_energy_vs_delta_scatter.png")
 with open("eda_plots_augmented/eda_summary.txt", "w") as f:
     f.write("=== TOP 25 FEATURES BY MUTUAL INFORMATION ===\n")
     f.write(df_mi.head(25).to_string(index=False))
-print("🎉 Completed EDA script execution and saved all visual assets!")

@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 warnings.filterwarnings('ignore')
 device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"🚀 INITIALIZING FEATURE-AUGMENTED STACKING ON {device.upper()}")
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     pl = [f"packet_length_{i}" for i in range(5)]
@@ -76,11 +75,9 @@ X_test_df = test_df[X_train_df.columns]
 X_train = X_train_df.values
 X_test = X_test_df.values
 N = len(X_train)
-print(f"Dataset Size: {N} flows | Level-0 Features: {X_train.shape[1]}")
 seeds = [42, 100, 2026]
 cache_file = "data/stacking_level1_oof_cache.npz"
 if os.path.exists(cache_file):
-    print("⚡ Loading Level-1 OOF Cache from disk...")
     cache = np.load(cache_file)
     oof_lgb = cache['oof_lgb']
     oof_xgb = cache['oof_xgb']
@@ -107,7 +104,6 @@ else:
         'device': 'auto',
         'random_state': 42
     }
-    print("\n--- Level 1: Training 4 Base Model Families Across 15 Folds ---")
     for s_idx, seed in enumerate(seeds):
         skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
         for fold, (tr, val) in enumerate(skf.split(X_train, y_enc)):
@@ -139,21 +135,11 @@ else:
             del clf_tab; torch.cuda.empty_cache()
     np.savez(cache_file, oof_lgb=oof_lgb, oof_xgb=oof_xgb, oof_tab=oof_tab, oof_cat=oof_cat,
              test_lgb=test_lgb, test_xgb=test_xgb, test_tab=test_tab, test_cat=test_cat)
-    print("💾 Saved Level-1 Cache to disk.")
-print("✅ Level 1 Out-of-Fold Matrix Generation Complete:")
-print(f"   LGBM OOF F1: {f1_score(y_enc, np.argmax(oof_lgb, axis=1), average='macro'):.4f}")
-print(f"   XGB  OOF F1: {f1_score(y_enc, np.argmax(oof_xgb, axis=1), average='macro'):.4f}")
-print(f"   Cat  OOF F1: {f1_score(y_enc, np.argmax(oof_cat, axis=1), average='macro'):.4f}")
-print(f"   Tab  OOF F1: {f1_score(y_enc, np.argmax(oof_tab, axis=1), average='macro'):.4f}")
 scaler = StandardScaler()
 X_tr_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 meta_X_train = np.hstack([oof_lgb, oof_xgb, oof_cat, oof_tab, X_tr_scaled])
 meta_X_test = np.hstack([test_lgb, test_xgb, test_cat, test_tab, X_test_scaled])
-print(f"\n✅ Level 1.5 Meta-Feature Matrix Shape: {meta_X_train.shape}")
-print("\n" + "="*70)
-print("🔍 LEVEL 2: BENCHMARKING CANDIDATE META-LEARNERS")
-print("="*70)
 skf_l2 = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 meta_models = {
     '1. ElasticNet Logistic Regression (C=0.20, L1=0.2)': LogisticRegression(C=0.20, l1_ratio=0.20, solver='saga', penalty='elasticnet', max_iter=600, random_state=42),
@@ -182,43 +168,30 @@ for name, clf_meta in meta_models.items():
             test_meta += (exp_test / np.sum(exp_test, axis=1, keepdims=True)) / 5.0
     meta_score = f1_score(y_enc, np.argmax(oof_meta, axis=1), average='macro')
     meta_acc = np.mean(np.argmax(oof_meta, axis=1) == y_enc)
-    print(f"  {name:<45} -> Macro-F1: {meta_score:.4f} | Acc: {meta_acc*100:.2f}%")
     if meta_score > best_meta_f1:
         best_meta_f1 = meta_score
         best_meta_name = name
         best_meta_oof = oof_meta
         best_meta_test = test_meta
-print(f"\n🏆 Best Level-2 Meta-Learner: {best_meta_name}")
-print(f"   Raw Stacking Macro-F1: {best_meta_f1:.4f}")
-print("\n--- Level 3: Optimizing Macro-F1 Metric Multipliers ---")
 def loss_func(multipliers):
     calib_p = best_meta_oof * multipliers
     preds = np.argmax(calib_p, axis=1)
     return -f1_score(y_enc, preds, average='macro')
 res = minimize(loss_func, np.ones(n_classes), method='Nelder-Mead', options={'maxiter': 800, 'xatol': 1e-4})
 best_multipliers = res.x
-print("Optimal Class Multipliers:", np.round(best_multipliers, 4))
 calib_oof = best_meta_oof * best_multipliers
 calib_test = best_meta_test * best_multipliers
 final_preds = np.argmax(calib_oof, axis=1)
 final_f1 = f1_score(y_enc, final_preds, average='macro')
 final_bacc = balanced_accuracy_score(y_enc, final_preds)
 final_acc = np.mean(final_preds == y_enc)
-print("\n" + "="*70)
-print(f"🏆 ALL-TIME RECORD STACKING MACRO-F1 : {final_f1:.4f}")
-print(f"🎯 ALL-TIME RECORD BALANCED ACCURACY : {final_bacc:.4f}")
-print(f"🎯 ALL-TIME RECORD OVERALL ACCURACY  : {final_acc*100:.2f}% ({np.sum(final_preds == y_enc)} / {N} correct)")
-print("="*70)
-print("\n--- 10-Class Classification Report (Feature-Augmented Stacking) ---")
-print(classification_report(y_enc, final_preds, target_names=class_names, digits=4))
 test_preds = np.argmax(calib_test, axis=1)
 test_labels = le_all.inverse_transform(test_preds)
 test_prob_norm = calib_test / np.sum(calib_test, axis=1, keepdims=True)
 df_sub = pd.DataFrame({'Predicted_Label': test_labels})
 for i, c in enumerate(class_names):
     df_sub[f'Prob_{c}'] = test_prob_norm[:, i]
-df_sub.to_csv("data/Final_Stacking_Winning_Predictions.csv", index=False)
-print("✅ Exported final stacking predictions to: data/Final_Stacking_Winning_Predictions.csv")
+df_sub.to_csv("data/Final_Stacking_Final_Predictions.csv", index=False)
 cm = confusion_matrix(y_enc, final_preds)
 fig, ax = plt.subplots(figsize=(12, 10))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
@@ -231,4 +204,3 @@ plt.xticks(rotation=45, ha='right')
 plt.tight_layout()
 plt.savefig('eda_plots_augmented/confusion_matrix_stacking.png', dpi=300, bbox_inches='tight')
 plt.close()
-print("✅ Saved confusion matrix to: eda_plots_augmented/confusion_matrix_stacking.png")

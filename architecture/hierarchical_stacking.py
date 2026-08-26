@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 warnings.filterwarnings('ignore')
 device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"🚀 INITIALIZING HIERARCHICAL CASCADED STACKING ON {device.upper()}")
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     pl = [f"packet_length_{i}" for i in range(5)]
@@ -82,7 +81,6 @@ X_test_df = test_df[X_train_df.columns]
 X_train = X_train_df.values
 X_test = X_test_df.values
 N = len(X_train)
-print(f"Dataset: {N} training flows | Features: {X_train.shape[1]}")
 seeds = [42, 100, 2026]
 tab_params = {
     'softmax_temperature': 0.80,
@@ -112,7 +110,6 @@ test_voi_lgb = np.zeros((len(X_test), 5))
 test_voi_xgb = np.zeros((len(X_test), 5))
 test_voi_cat = np.zeros((len(X_test), 5))
 test_voi_tab = np.zeros((len(X_test), 5))
-print("\n--- Level 1: Training 15-Fold Hierarchical Estimators ---")
 for s_idx, seed in enumerate(seeds):
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
     for fold, (tr, val) in enumerate(skf.split(X_train, y_enc)):
@@ -183,8 +180,6 @@ for s_idx, seed in enumerate(seeds):
         oof_voi_tab[val] += ca_tab.predict_proba(X_val) / len(seeds)
         test_voi_tab += ca_tab.predict_proba(X_test) / (5.0 * len(seeds))
         del ca_tab; torch.cuda.empty_cache()
-print("✅ Level 1 Hierarchical OOF Generation Complete.")
-print("\n--- Level 2: Training Regularized ElasticNet Meta-Learners ---")
 scaler = StandardScaler()
 X_tr_s = scaler.fit_transform(X_train)
 X_te_s = scaler.transform(X_test)
@@ -194,7 +189,6 @@ gate_meta = LogisticRegression(C=0.50, penalty='l2', solver='lbfgs', random_stat
 gate_meta.fit(meta_gate_X_tr, y_modality)
 p_gate_oof = gate_meta.predict_proba(meta_gate_X_tr)
 p_gate_test = gate_meta.predict_proba(meta_gate_X_te)
-print(f"  Gate Meta-Learner Modality Accuracy: {np.mean(np.argmax(p_gate_oof, axis=1) == y_modality)*100:.2f}%")
 meta_vid_X_tr = np.hstack([oof_vid_lgb, oof_vid_xgb, oof_vid_cat, oof_vid_tab, X_tr_s])
 meta_vid_X_te = np.hstack([test_vid_lgb, test_vid_xgb, test_vid_cat, test_vid_tab, X_te_s])
 vid_mask_all = (y_modality == 1)
@@ -225,36 +219,25 @@ p_joint_oof /= (p_joint_oof.sum(axis=1, keepdims=True) + 1e-9)
 p_joint_test /= (p_joint_test.sum(axis=1, keepdims=True) + 1e-9)
 raw_f1 = f1_score(y_enc, np.argmax(p_joint_oof, axis=1), average='macro')
 raw_acc = np.mean(np.argmax(p_joint_oof, axis=1) == y_enc)
-print(f"\n🏆 Raw Hierarchical Stacking Macro-F1: {raw_f1:.4f} | Acc: {raw_acc*100:.2f}%")
-print("\n--- Level 3: Optimizing Macro-F1 Metric Multipliers ---")
 def loss_func(multipliers):
     calib_p = p_joint_oof * multipliers
     preds = np.argmax(calib_p, axis=1)
     return -f1_score(y_enc, preds, average='macro')
 res = minimize(loss_func, np.ones(n_classes), method='Nelder-Mead', options={'maxiter': 800, 'xatol': 1e-4})
 best_multipliers = res.x
-print("Optimal Class Multipliers:", np.round(best_multipliers, 4))
 calib_oof = p_joint_oof * best_multipliers
 calib_test = p_joint_test * best_multipliers
 final_preds = np.argmax(calib_oof, axis=1)
 final_f1 = f1_score(y_enc, final_preds, average='macro')
 final_bacc = balanced_accuracy_score(y_enc, final_preds)
 final_acc = np.mean(final_preds == y_enc)
-print("\n" + "="*70)
-print(f"🏆 ALL-TIME RECORD HIERARCHICAL STACKING MACRO-F1 : {final_f1:.4f}")
-print(f"🎯 ALL-TIME RECORD BALANCED ACCURACY             : {final_bacc:.4f}")
-print(f"🎯 ALL-TIME RECORD OVERALL ACCURACY              : {final_acc*100:.2f}% ({np.sum(final_preds == y_enc)} / {N} correct)")
-print("="*70)
-print("\n--- 10-Class Classification Report (Hierarchical Cascaded Stacking) ---")
-print(classification_report(y_enc, final_preds, target_names=class_names, digits=4))
 test_preds = np.argmax(calib_test, axis=1)
 test_labels = le_all.inverse_transform(test_preds)
 test_prob_norm = calib_test / np.sum(calib_test, axis=1, keepdims=True)
 df_sub = pd.DataFrame({'Predicted_Label': test_labels})
 for i, c in enumerate(class_names):
     df_sub[f'Prob_{c}'] = test_prob_norm[:, i]
-df_sub.to_csv("data/Final_Hierarchical_Stacking_Winning_Predictions.csv", index=False)
-print("✅ Exported final predictions to: data/Final_Hierarchical_Stacking_Winning_Predictions.csv")
+df_sub.to_csv("data/Final_Hierarchical_Stacking_Final_Predictions.csv", index=False)
 cm = confusion_matrix(y_enc, final_preds)
 fig, ax = plt.subplots(figsize=(12, 10))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
@@ -267,4 +250,3 @@ plt.xticks(rotation=45, ha='right')
 plt.tight_layout()
 plt.savefig('eda_plots_augmented/confusion_matrix_hierarchical_stacking.png', dpi=300, bbox_inches='tight')
 plt.close()
-print("✅ Saved confusion matrix to: eda_plots_augmented/confusion_matrix_hierarchical_stacking.png")

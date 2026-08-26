@@ -20,7 +20,6 @@ def map_filename_to_class(filename):
             return c
     return None
 def parse_pcap(filepath, class_label, stride=2):
-    print(f"  Parsing PCAP: {filepath} -> Target Class: {class_label}")
     packets = rdpcap(filepath)
     timestamps = []
     payload_lengths = []
@@ -31,7 +30,6 @@ def parse_pcap(filepath, class_label, stride=2):
                 timestamps.append(float(pkt.time))
                 payload_lengths.append(payload_len)
     if len(timestamps) < 5:
-        print(f"  ⚠️ Warning: Only {len(timestamps)} UDP packets found in {filepath}. Need >= 5.")
         return pd.DataFrame()
     timestamps = np.array(timestamps)
     payload_lengths = np.array(payload_lengths)
@@ -54,10 +52,8 @@ def parse_pcap(filepath, class_label, stride=2):
         }
         rows.append(row)
     df_res = pd.DataFrame(rows)
-    print(f"  ✅ Extracted {len(df_res)} 5-packet flows from {os.path.basename(filepath)}")
     return df_res
 def parse_raw_csv(filepath, class_label, stride=2):
-    print(f"  Parsing CSV: {filepath} -> Target Class: {class_label}")
     df_raw = pd.read_csv(filepath)
     if 'packet_length_0' in df_raw.columns and 'relative_time_1' in df_raw.columns:
         df_raw['label'] = class_label
@@ -85,22 +81,15 @@ def parse_raw_csv(filepath, class_label, stride=2):
         }
         rows.append(row)
     df_res = pd.DataFrame(rows)
-    print(f"  ✅ Extracted {len(df_res)} 5-packet flows from {os.path.basename(filepath)}")
     return df_res
 def main():
-    print("="*70)
-    print("🔍 Scanning data/external_raw/ for New Network Capture Files...")
-    print("="*70)
     files = glob.glob(os.path.join(RAW_DIR, "*"))
     if not files:
-        print(f"⚠️ No files found in {RAW_DIR}!")
-        print(f"Please drop your .pcap, .pcapng, or .csv files into: {os.path.abspath(RAW_DIR)}")
         return
     new_dfs = []
     for f in sorted(files):
         c_label = map_filename_to_class(os.path.basename(f))
         if not c_label:
-            print(f"⚠️ Skipping '{os.path.basename(f)}': Unable to infer class name. Name file like 'meet_voice.pcap' or 'zoom_video.csv'.")
             continue
         ext = os.path.splitext(f)[1].lower()
         if ext in ['.pcap', '.pcapng']:
@@ -112,17 +101,10 @@ def main():
             if not df_parsed.empty:
                 new_dfs.append(df_parsed)
     if not new_dfs:
-        print("No valid packet flows extracted.")
         return
     df_new_all = pd.concat(new_dfs, ignore_index=True)
     df_orig = pd.read_csv("data/Training_set.csv")
     df_augmented = pd.concat([df_orig, df_new_all], ignore_index=True)
     df_augmented.to_csv(OUT_CSV, index=False)
-    print("\n" + "="*70)
-    print(f"🎉 SUCCESS! Merged {len(df_new_all)} external flows with {len(df_orig)} base flows.")
-    print(f"📁 Augmented Dataset saved to: {OUT_CSV} (Total: {len(df_augmented)} rows)")
-    print("="*70)
-    print("\nUpdated Class Distribution:")
-    print(df_augmented['label'].value_counts())
 if __name__ == '__main__':
     main()

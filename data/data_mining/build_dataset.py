@@ -4,7 +4,6 @@ import json
 import numpy as np
 import pandas as pd
 import soundfile as sf
-print("🚀 Building Fully Balanced 10-Class Augmented Dataset...")
 mirage_dir = "./data/MIRAGE-AppAct-2024"
 app_targets = {
     'Discord': {'audiocall': 'Discord_voice', 'videocall': 'Discord_video'},
@@ -71,7 +70,6 @@ for app, activity_map in app_targets.items():
                         app_counts[target_class] += 1
         except Exception:
             pass
-print(f"Extracted {len(extracted_rows)} flows from MIRAGE.")
 flac_files = glob.glob("./data/dev-clean/LibriSpeech/dev-clean/*/*/*.flac")
 rng = np.random.RandomState(42)
 voice_configs = {
@@ -156,14 +154,6 @@ out_csv = "data/Augmented_Training_set.csv"
 out_xlsx = "data/Augmented_Training_set.xlsx"
 df_augmented.to_csv(out_csv, index=False)
 df_augmented.to_excel(out_xlsx, index=False)
-print("\n" + "="*70)
-print(f"🎉 10-CLASS BALANCED AUGMENTATION COMPLETE!")
-print(f"📁 Augmented CSV saved to   : {out_csv}")
-print(f"📁 Augmented Excel saved to : {out_xlsx}")
-print(f"📊 Total Dataset Shape      : {df_augmented.shape} (Expanded from 1,285 to {len(df_augmented)} rows)")
-print("="*70)
-print("\n📈 Final Balanced 10-Class Distribution:")
 summary = df_augmented['label'].value_counts().reset_index()
 summary.columns = ['Traffic_Class', 'Sample_Count']
 summary['Percentage'] = (summary['Sample_Count'] / len(df_augmented) * 100).round(2).astype(str) + '%'
-print(summary.to_string(index=False))

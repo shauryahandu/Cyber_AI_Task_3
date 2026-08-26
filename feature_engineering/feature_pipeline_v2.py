@@ -59,26 +59,20 @@ X_raw = df_train_eng[features_all]
 y = df_train_eng['label']
 le = LabelEncoder()
 y_enc = le.fit_transform(y)
-print(f"Total features engineered: {len(features_all)}")
 vars_ = X_raw.var()
 drop_vars = vars_[vars_ == 0].index.tolist()
 X_raw = X_raw.drop(columns=drop_vars)
-print(f"Dropped zero-variance: {len(drop_vars)}")
 corr = spearmanr(X_raw).statistic
 corr_matrix = np.abs(corr)
 upper = np.triu(corr_matrix, k=1)
 to_drop = [X_raw.columns[i] for i in range(upper.shape[1]) if any(upper[:, i] > 0.90)]
 X_pruned = X_raw.drop(columns=to_drop)
-print(f"Dropped correlated: {len(to_drop)}, remaining: {X_pruned.shape[1]}")
 clf = ExtraTreesClassifier(n_estimators=200, random_state=42)
 clf.fit(X_pruned, y_enc)
 selector = SelectFromModel(clf, prefit=True, threshold="0.5*mean")
 kept_idx = selector.get_support(indices=True)
 final_features = X_pruned.columns[kept_idx].tolist()
-print(f"Features kept (0.5*mean threshold): {len(final_features)}")
-print(f"Final features: {final_features}")
 df_train_final = pd.concat([X_pruned[final_features], y], axis=1)
 df_train_final.to_csv("data/Training_set_v2.csv", index=False)
 df_test_final = df_test_eng[final_features]
 df_test_final.to_csv("data/Testing_set_v2.csv", index=False)
-print("Saved Training_set_v2.csv and Testing_set_v2.csv")

@@ -23,13 +23,6 @@ if not os.path.exists(TRAIN_PATH):
     OUTPUT_DIR = "."
 train = pd.read_excel(TRAIN_PATH)
 test = pd.read_excel(TEST_PATH)
-print("Train shape:", train.shape)
-print("Test shape:", test.shape)
-print("\nTrain columns:", train.columns.tolist())
-print("\nMissing values (train):\n", train.isnull().sum())
-print("\nMissing values (test):\n", test.isnull().sum())
-print("\nDuplicate rows in train:", train.duplicated().sum())
-print("\nClass distribution:\n", train["label"].value_counts())
 fig, ax = plt.subplots(figsize=(10, 5))
 train["label"].value_counts().sort_index().plot(kind="bar", ax=ax, color="steelblue")
 ax.set_title("Class distribution (train)")
@@ -50,8 +43,6 @@ plt.suptitle("")
 plt.tight_layout()
 plt.savefig(f"{OUTPUT_DIR}/eda_packet_length_by_class.png", dpi=120)
 plt.close()
-print("\nrelative_time_0 unique values (train):", train["relative_time_0"].unique())
-print("relative_time_0 unique values (test):", test["relative_time_0"].unique())
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     pl = [f"packet_length_{i}" for i in range(5)]
@@ -87,8 +78,6 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 train_fe = engineer_features(train)
 test_fe = engineer_features(test)
-print("\nEngineered train shape:", train_fe.shape)
-print("Engineered test shape:", test_fe.shape)
 assert train_fe.drop(columns=["label"]).isnull().sum().sum() == 0
 assert test_fe.isnull().sum().sum() == 0
 le = LabelEncoder()
@@ -102,7 +91,6 @@ probe = LGBMClassifier(
 )
 probe.fit(X, y)
 importances = pd.Series(probe.feature_importances_, index=X.columns).sort_values(ascending=False)
-print("\nTop 15 most important engineered features:\n", importances.head(15))
 fig, ax = plt.subplots(figsize=(8, 6))
 importances.head(20).sort_values().plot(kind="barh", ax=ax, color="teal")
 ax.set_title("Top 20 feature importances (LightGBM)")
@@ -142,13 +130,11 @@ for name, model in models.items():
         "f1_weighted": scores["test_f1_weighted"].mean(),
         "accuracy": scores["test_accuracy"].mean(),
     })
-    print(f"{name:15s} F1-macro={comparison_rows[-1]['f1_macro']:.4f} "
           f"(+-{comparison_rows[-1]['f1_macro_std']:.4f})  "
           f"F1-weighted={comparison_rows[-1]['f1_weighted']:.4f}  "
           f"Acc={comparison_rows[-1]['accuracy']:.4f}")
 comparison_df = pd.DataFrame(comparison_rows).sort_values("f1_macro", ascending=False)
 comparison_df.to_csv(f"{OUTPUT_DIR}/model_comparison.csv", index=False)
-print("\nModel comparison:\n", comparison_df)
 fig, ax = plt.subplots(figsize=(9, 5))
 comparison_df.set_index("model")["f1_macro"].plot(kind="barh", ax=ax, color="darkorange")
 ax.set_xlabel("F1-macro (5-fold CV)")
@@ -157,7 +143,6 @@ plt.tight_layout()
 plt.savefig(f"{OUTPUT_DIR}/model_comparison.png", dpi=120)
 plt.close()
 best_model_name = comparison_df.iloc[0]["model"]
-print(f"\nBest model by CV F1-macro: {best_model_name}")
 final_params = dict(
     n_estimators=300,
     num_leaves=31,
@@ -176,10 +161,6 @@ final_model = LGBMClassifier(**final_params)
 oof_preds = cross_val_predict(final_model, X, y, cv=cv, n_jobs=1)
 oof_f1_macro = f1_score(y, oof_preds, average="macro")
 oof_f1_weighted = f1_score(y, oof_preds, average="weighted")
-print(f"\nFinal model (tuned LightGBM) — out-of-fold F1-macro: {oof_f1_macro:.4f}")
-print(f"Final model (tuned LightGBM) — out-of-fold F1-weighted: {oof_f1_weighted:.4f}")
-print("\nPer-class report (out-of-fold):\n")
-print(classification_report(y, oof_preds, target_names=le.classes_))
 cm = confusion_matrix(y, oof_preds)
 fig, ax = plt.subplots(figsize=(9, 8))
 ConfusionMatrixDisplay(cm, display_labels=le.classes_).plot(
@@ -198,16 +179,6 @@ submission = pd.DataFrame({
     "label": test_preds,
 })
 submission.to_csv(f"{OUTPUT_DIR}/submission.csv", index=False)
-print(f"\nSaved predictions for {len(submission)} test rows to submission.csv")
-print(submission["label"].value_counts())
 proba_df = pd.DataFrame(test_proba, columns=le.classes_)
 proba_df.insert(0, "id", np.arange(len(test)))
 proba_df.to_csv(f"{OUTPUT_DIR}/submission_probabilities.csv", index=False)
-print("\nDone. Outputs written to:", OUTPUT_DIR)
-print(" - eda_class_balance.png")
-print(" - eda_packet_length_by_class.png")
-print(" - feature_importance.png")
-print(" - model_comparison.csv / model_comparison.png")
-print(" - confusion_matrix.png")
-print(" - submission.csv")
-print(" - submission_probabilities.csv")

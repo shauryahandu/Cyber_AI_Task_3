@@ -4,14 +4,9 @@ import json
 import numpy as np
 import pandas as pd
 from scipy.stats import ks_2samp, wasserstein_distance
-print("="*80)
-print("🔬 STEP 1: FORENSIC EXACT SEQUENCE SEARCH (TRAINING SET VS MIRAGE)")
-print("="*80)
 df_orig = pd.read_csv("data/Training_set.csv")
 orig_len_tuples = set([tuple(r) for r in df_orig[['packet_length_0', 'packet_length_1', 'packet_length_2', 'packet_length_3', 'packet_length_4']].values])
-print(f"Original Training Set: {len(df_orig)} flows, {len(orig_len_tuples)} unique 5-packet length sequences.")
 mirage_files = glob.glob("./data/MIRAGE-AppAct-2024/*/*.json")
-print(f"Searching across {len(mirage_files)} MIRAGE JSON trace files...")
 exact_matches = 0
 total_mirage_flows_checked = 0
 for jf in mirage_files:
@@ -31,15 +26,8 @@ for jf in mirage_files:
                             exact_matches += 1
     except Exception:
         pass
-print(f"Total MIRAGE UDP flows scanned: {total_mirage_flows_checked}")
-print(f"Exact 5-packet length sequence matches found: {exact_matches}")
 if exact_matches > 0:
-    print(f"  👉 Finding: The original dataset shares {exact_matches} packet length sequence matches with the MIRAGE testbed captures!")
 else:
-    print("  👉 Finding: The original dataset was captured in an independent testbed session with identical protocol parameters.")
-print("\n" + "="*80)
-print("📊 STEP 2: STATISTICAL RELEVANCY & DISTRIBUTION ALIGNMENT AUDIT")
-print("="*80)
 df_aug = pd.read_csv("data/Augmented_Training_set.csv")
 df_orig_part = df_aug.iloc[:1285]
 df_ext_part = df_aug.iloc[1285:]
@@ -68,8 +56,3 @@ for c in sorted(df_orig['label'].unique()):
         'Physical_Compatibility': 'High (Strong Match)' if w_dist_len < 80 else ('Moderate' if w_dist_len < 250 else 'Domain Shift')
     })
 df_rel = pd.DataFrame(relevancy_report)
-print(df_rel.to_string(index=False))
-print("\n" + "="*80)
-print("🔬 STEP 3: PROTOCOL INVARIANT RELEVANCY SUMMARY")
-print("="*80)
-print()

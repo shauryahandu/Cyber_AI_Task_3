@@ -1,4 +1,4 @@
-# Model Architecture: Supreme Feature-Augmented Stacking with Resolvers
+# Model Architecture: Ensemble Feature-Augmented Stacking with Resolvers
 
 ## Architectural Breakdown
 

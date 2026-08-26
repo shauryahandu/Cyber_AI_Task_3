@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 warnings.filterwarnings('ignore')
 device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"🚀 INITIALIZING SUPREME STACKING WITH RESOLVERS & TTA ON {device.upper()}")
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     pl = [f"packet_length_{i}" for i in range(5)]
@@ -96,7 +95,6 @@ X_test_df = test_df[X_train_df.columns]
 X_train = X_train_df.values
 X_test = X_test_df.values
 N = len(X_train)
-print(f"Dataset Size: {N} flows | Level-0 Features: {X_train.shape[1]}")
 seeds = [42, 100, 2026]
 oof_lgb = np.zeros((N, n_classes))
 oof_xgb = np.zeros((N, n_classes))
@@ -114,7 +112,6 @@ tab_params = {
     'device': 'auto',
     'random_state': 42
 }
-print("\n--- Level 1: Training 4 Base Model Families Across 15 Folds ---")
 for s_idx, seed in enumerate(seeds):
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
     for fold, (tr, val) in enumerate(skf.split(X_train, y_enc)):
@@ -144,18 +141,11 @@ for s_idx, seed in enumerate(seeds):
         oof_tab[val] += clf_tab.predict_proba(X_val) / len(seeds)
         test_tab += clf_tab.predict_proba(X_test) / (5.0 * len(seeds))
         del clf_tab; torch.cuda.empty_cache()
-print("✅ Level 1 Out-of-Fold Matrix Generation Complete:")
-print(f"   LGBM OOF F1: {f1_score(y_enc, np.argmax(oof_lgb, axis=1), average='macro'):.4f}")
-print(f"   XGB  OOF F1: {f1_score(y_enc, np.argmax(oof_xgb, axis=1), average='macro'):.4f}")
-print(f"   Cat  OOF F1: {f1_score(y_enc, np.argmax(oof_cat, axis=1), average='macro'):.4f}")
-print(f"   Tab  OOF F1: {f1_score(y_enc, np.argmax(oof_tab, axis=1), average='macro'):.4f}")
 scaler = StandardScaler()
 X_tr_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 meta_X_train = np.hstack([oof_lgb, oof_xgb, oof_cat, oof_tab, X_tr_scaled])
 meta_X_test = np.hstack([test_lgb, test_xgb, test_cat, test_tab, X_test_scaled])
-print(f"\n✅ Level 1.5 Meta-Feature Matrix Shape: {meta_X_train.shape}")
-print("\n--- Level 2: Training ElasticNet Meta-Learner ---")
 skf_l2 = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 oof_meta = np.zeros((N, n_classes))
 test_meta = np.zeros((len(X_test), n_classes))
@@ -165,8 +155,6 @@ for fold_idx, (tr_idx, val_idx) in enumerate(skf_l2.split(meta_X_train, y_enc)):
     oof_meta[val_idx] = clf_meta.predict_proba(meta_X_train[val_idx])
     test_meta += clf_meta.predict_proba(meta_X_test) / 5.0
 raw_meta_f1 = f1_score(y_enc, np.argmax(oof_meta, axis=1), average='macro')
-print(f"  Level-2 ElasticNet Stacking Macro-F1: {raw_meta_f1:.4f}")
-print("\n--- Level 2.5: Training Confidence-Gated Pairwise Conflict Resolvers ---")
 c_zvid = np.where(class_names == 'Zoom_video')[0][0]
 c_mvid = np.where(class_names == 'GoogleMeet_video')[0][0]
 mask_vid_pair = np.isin(y_enc, [c_zvid, c_mvid])
@@ -199,28 +187,17 @@ for i in range(N):
         oof_resolved[i, c_zvoi] = p_sum_orig * p_zvoi_res
         oof_resolved[i, c_mvoi] = p_sum_orig * (1.0 - p_zvoi_res)
         n_voi_disambiguated += 1
-print(f"  Disambiguated {n_vid_disambiguated} Zoom/Meet Video ties and {n_voi_disambiguated} Zoom/Meet Voice ties.")
-print("\n--- Level 3: Optimizing Macro-F1 Metric Multipliers ---")
 def loss_func(multipliers):
     calib_p = oof_resolved * multipliers
     preds = np.argmax(calib_p, axis=1)
     return -f1_score(y_enc, preds, average='macro')
 res = minimize(loss_func, np.ones(n_classes), method='Nelder-Mead', options={'maxiter': 800, 'xatol': 1e-4})
 best_multipliers = res.x
-print("Optimal Class Multipliers:", np.round(best_multipliers, 4))
 calib_oof = oof_resolved * best_multipliers
 final_preds = np.argmax(calib_oof, axis=1)
 final_f1 = f1_score(y_enc, final_preds, average='macro')
 final_bacc = balanced_accuracy_score(y_enc, final_preds)
 final_acc = np.mean(final_preds == y_enc)
-print("\n" + "="*70)
-print(f"🏆 ALL-TIME RECORD SUPREME STACKING MACRO-F1 : {final_f1:.4f}")
-print(f"🎯 ALL-TIME RECORD BALANCED ACCURACY         : {final_bacc:.4f}")
-print(f"🎯 ALL-TIME RECORD OVERALL ACCURACY          : {final_acc*100:.2f}% ({np.sum(final_preds == y_enc)} / {N} correct)")
-print("="*70)
-print("\n--- 10-Class Classification Report (Supreme Stacking with Resolvers) ---")
-print(classification_report(y_enc, final_preds, target_names=class_names, digits=4))
-print("\n--- Level 4: Executing 5-Pass Test-Time Micro-Jitter Augmentation (TTA) ---")
 tta_test_probs = np.zeros((len(X_test), n_classes))
 np.random.seed(42)
 for tta_pass in range(5):
@@ -254,25 +231,22 @@ for tta_pass in range(5):
             p_meta_j[i, c_zvoi] = p_sum_orig * p_zvoi_res
             p_meta_j[i, c_mvoi] = p_sum_orig * (1.0 - p_zvoi_res)
     tta_test_probs += (p_meta_j * best_multipliers) / 5.0
-print("✅ 5-Pass TTA Inference Complete.")
 test_preds = np.argmax(tta_test_probs, axis=1)
 test_labels = le_all.inverse_transform(test_preds)
 test_prob_norm = tta_test_probs / np.sum(tta_test_probs, axis=1, keepdims=True)
 df_sub = pd.DataFrame({'Predicted_Label': test_labels})
 for i, c in enumerate(class_names):
     df_sub[f'Prob_{c}'] = test_prob_norm[:, i]
-df_sub.to_csv("data/Final_Supreme_Stacking_Resolvers_Winning_Predictions.csv", index=False)
-print("✅ Exported winning predictions to: data/Final_Supreme_Stacking_Resolvers_Winning_Predictions.csv")
+df_sub.to_csv("data/Final_Ensemble_Stacking_Resolvers_Final_Predictions.csv", index=False)
 cm = confusion_matrix(y_enc, final_preds)
 fig, ax = plt.subplots(figsize=(12, 10))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
             xticklabels=class_names, yticklabels=class_names,
             linewidths=0.5, linecolor='white', cbar_kws={'label': 'Flow Count'}, ax=ax)
-ax.set_title(f'Supreme Stacking with Resolvers Confusion Matrix (Macro-F1 = {final_f1:.4f}, N = 3,325)\nLevel-1 (15 Folds) + Level-2 ElasticNet (96 Feats) + Pairwise Resolvers + TTA', fontsize=11, fontweight='bold', color='
+ax.set_title(f'Ensemble Stacking with Resolvers Confusion Matrix (Macro-F1 = {final_f1:.4f}, N = 3,325)\nLevel-1 (15 Folds) + Level-2 ElasticNet (96 Feats) + Pairwise Resolvers + TTA', fontsize=11, fontweight='bold', color='
 ax.set_xlabel('Predicted Class', fontsize=11, fontweight='bold')
 ax.set_ylabel('True Class', fontsize=11, fontweight='bold')
 plt.xticks(rotation=45, ha='right')
 plt.tight_layout()
-plt.savefig('eda_plots_augmented/confusion_matrix_supreme_stacking_resolvers.png', dpi=300, bbox_inches='tight')
+plt.savefig('eda_plots_augmented/confusion_matrix_ensemble_stacking_resolvers.png', dpi=300, bbox_inches='tight')
 plt.close()
-print("✅ Saved confusion matrix to: eda_plots_augmented/confusion_matrix_supreme_stacking_resolvers.png")

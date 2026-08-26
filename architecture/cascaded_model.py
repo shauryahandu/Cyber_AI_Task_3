@@ -13,7 +13,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 warnings.filterwarnings('ignore')
 device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"🚀 INITIALIZING LEAN 3-MODEL CASCADED SUPER-PIPELINE ON {device.upper()}")
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     pl = [f"packet_length_{i}" for i in range(5)]
@@ -82,7 +81,6 @@ X_test_df = test_df[X_train_df.columns]
 X_train = X_train_df.values
 X_test = X_test_df.values
 N = len(X_train)
-print(f"Dataset Size: {N} flows | Features: {X_train.shape[1]}")
 seeds = [42, 100, 2026]
 tab_params = {
     'softmax_temperature': 0.80,
@@ -181,18 +179,14 @@ def run_cascaded_evaluation(X_tr_data, y_tr_data, y_mod_tr_data, X_t_data, sampl
         oof_probs += oof_seed / len(seeds)
         test_probs += test_seed / len(seeds)
     return oof_probs, test_probs
-print("\n--- Phase 1: 15-Fold Multi-Seed Cascaded Evaluation ---")
 base_oof_probs, base_test_probs = run_cascaded_evaluation(X_train, y_enc, y_modality, X_test)
 base_preds = np.argmax(base_oof_probs, axis=1)
 base_f1 = f1_score(y_enc, base_preds, average='macro')
 base_acc = np.mean(base_preds == y_enc)
-print(f"🏆 Base 15-Fold Macro-F1 (Before Transduction): {base_f1:.4f} | Acc: {base_acc*100:.2f}%")
-print("\n--- Phase 2: Transductive High-Confidence Pseudo-Labeling ---")
 test_max_p = np.max(base_test_probs, axis=1)
 test_pseudo_y = np.argmax(base_test_probs, axis=1)
 conf_mask = (test_max_p >= 0.93)
 n_pseudo = np.sum(conf_mask)
-print(f"Identified {n_pseudo} / {len(X_test)} high-confidence test flows (P >= 0.93, {n_pseudo/len(X_test)*100:.1f}%).")
 if n_pseudo >= 30:
     X_pseudo = X_test[conf_mask]
     y_pseudo = test_pseudo_y[conf_mask]
@@ -201,44 +195,31 @@ if n_pseudo >= 30:
     y_aug = np.concatenate([y_enc, y_pseudo])
     y_mod_aug = np.concatenate([y_modality, y_mod_pseudo])
     sw_aug = np.concatenate([np.ones(len(X_train)), 0.50 * np.ones(len(X_pseudo))])
-    print(f"Enriched training manifold: {len(X_train)} original + {n_pseudo} pseudo-labeled = {len(X_aug)} total flows.")
-    print("\n--- Phase 3: Retraining 15-Fold Cascaded Ensemble with Transduction ---")
     trans_oof_probs_full, trans_test_probs = run_cascaded_evaluation(X_aug, y_aug, y_mod_aug, X_test, sample_weights=sw_aug)
     final_oof_probs = trans_oof_probs_full[:len(X_train)]
     final_test_probs = trans_test_probs
 else:
-    print("Insufficient high-confidence flows; using base predictions.")
     final_oof_probs = base_oof_probs
     final_test_probs = base_test_probs
-print("\n--- Phase 4: Macro-F1 Metric Multiplier Calibration ---")
 def loss_func(multipliers):
     calib_p = final_oof_probs * multipliers
     preds = np.argmax(calib_p, axis=1)
     return -f1_score(y_enc, preds, average='macro')
 res = minimize(loss_func, np.ones(n_classes), method='Nelder-Mead', options={'maxiter': 800, 'xatol': 1e-4})
 best_multipliers = res.x
-print("Optimal Class Multipliers:", np.round(best_multipliers, 4))
 calib_oof = final_oof_probs * best_multipliers
 calib_test = final_test_probs * best_multipliers
 final_preds = np.argmax(calib_oof, axis=1)
 final_f1 = f1_score(y_enc, final_preds, average='macro')
 final_bacc = balanced_accuracy_score(y_enc, final_preds)
 final_acc = np.mean(final_preds == y_enc)
-print("\n" + "="*70)
-print(f"🏆 NEW ALL-TIME PROJECT PEAK MACRO-F1 : {final_f1:.4f}")
-print(f"🎯 NEW ALL-TIME PROJECT BALANCED ACC  : {final_bacc:.4f}")
-print(f"🎯 NEW ALL-TIME PROJECT EXACT ACCURACY: {final_acc*100:.2f}% ({np.sum(final_preds == y_enc)} / {N} correct)")
-print("="*70)
-print("\n--- 10-Class Classification Report (Lean 3-Model Cascaded Super-Pipeline) ---")
-print(classification_report(y_enc, final_preds, target_names=class_names, digits=4))
 test_preds = np.argmax(calib_test, axis=1)
 test_labels = le_all.inverse_transform(test_preds)
 test_prob_norm = calib_test / np.sum(calib_test, axis=1, keepdims=True)
 df_sub = pd.DataFrame({'Predicted_Label': test_labels})
 for i, c in enumerate(class_names):
     df_sub[f'Prob_{c}'] = test_prob_norm[:, i]
-df_sub.to_csv("data/Final_Lean_3Model_Winning_Predictions.csv", index=False)
-print("✅ Exported winning predictions to: data/Final_Lean_3Model_Winning_Predictions.csv")
+df_sub.to_csv("data/Final_Lean_3Model_Final_Predictions.csv", index=False)
 cm = confusion_matrix(y_enc, final_preds)
 fig, ax = plt.subplots(figsize=(12, 10))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
@@ -251,4 +232,3 @@ plt.xticks(rotation=45, ha='right')
 plt.tight_layout()
 plt.savefig('eda_plots_augmented/confusion_matrix_lean_3model.png', dpi=300, bbox_inches='tight')
 plt.close()
-print("✅ Saved confusion matrix to: eda_plots_augmented/confusion_matrix_lean_3model.png")
