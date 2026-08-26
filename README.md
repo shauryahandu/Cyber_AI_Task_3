@@ -93,13 +93,14 @@ Full audit report available in [`results/OVERFITTING_AUDIT.md`](results/OVERFITT
 
 ---
 
-## 7. Data Provenance & Sanity Audits
+## 7. Data Mining Procedure & Sanity Audits
 
-Full audit documentation available in [`data/DATA_SOURCES.md`](data/DATA_SOURCES.md).
+Full procedure and provenance documentation available in [`data/DATA_SOURCES.md`](data/DATA_SOURCES.md).
 
 * **Scope:** Restricted strictly to the 5 target applications (Discord, GoogleMeet, Messenger, WhatsApp, Zoom).
 * **Parity Ratio:** 1.05 (10 balanced classes across $N = 5,175$ flows).
-* **Sanity Checks:** 0 Nulls, valid physical MTU ($28 \le L \le 1500$), monotonic timing, 0 test set duplicates.
+* **Procedure:** Stream demultiplexing, sliding 5-packet window extraction, MTU bounding ($28 \le L \le 1500$), monotonic timing validation.
+* **Extraction Script:** [`src/data_mining.py`](src/data_mining.py).
 
 ---
 
@@ -110,7 +111,7 @@ Full audit documentation available in [`data/DATA_SOURCES.md`](data/DATA_SOURCES
 │   ├── ARCHITECTURE_FLOW.md       # Technical pipeline specification & research citations
 │   └── architecture_flow_diagram.png # 5-stage architecture flow diagram
 ├── data/
-│   ├── DATA_SOURCES.md            # Data provenance, PCAP mining, and sanity audits
+│   ├── DATA_SOURCES.md            # Data mining procedure, provenance, and sanity audits
 │   ├── Training_set.csv           # Original baseline training set (N = 1,285)
 │   ├── Testing_set.csv            # Original competition test set (N = 327)
 │   └── Augmented_Training_set.csv  # Verified 10-class master dataset (N = 5,175)
@@ -118,6 +119,7 @@ Full audit documentation available in [`data/DATA_SOURCES.md`](data/DATA_SOURCES
 │   ├── FEATURE_DICTIONARY.md      # Full feature definitions and mathematical formulas
 │   └── plots/                     # High-resolution feature distribution plots
 ├── src/
+│   ├── data_mining.py             # PCAP parsing & 5-packet window extraction routine
 │   ├── features.py                # Transport invariant extraction & sequence tensor builder
 │   ├── model.py                   # Bi-GRU sequence embedding neural backbone
 │   ├── train_and_evaluate.py      # 15-fold cross-validation training and evaluation
@@ -140,6 +142,9 @@ Full audit documentation available in [`data/DATA_SOURCES.md`](data/DATA_SOURCES
 ```bash
 # Install dependencies
 pip install -r requirements.txt
+
+# Run data mining and flow extraction
+python3 src/data_mining.py data/raw_captures data/Augmented_Training_set.csv
 
 # Run 15-fold cross-validation & generate predictions
 python3 src/train_and_evaluate.py
