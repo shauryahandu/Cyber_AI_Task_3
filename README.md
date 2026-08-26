@@ -4,13 +4,13 @@ Official implementation of the **Hierarchical Multi-View Stacking (HMV-Stack)** 
 
 ---
 
-## 🏆 1. Master Leaderboard (15-Fold Cross-Validation, N = 5,175)
+## 1. Master Leaderboard (15-Fold Cross-Validation, N = 5,175)
 
 | Rank | Model Architecture | 15-Fold Macro-F1 | Balanced Accuracy | Overall Accuracy | Exact Flows Correct |
 | :---: | :--- | :---: | :---: | :---: | :---: |
-| **🥇 1** | **Hierarchical Multi-View Stacking (HMV-Stack)** | **0.9135** | **0.9138** | **91.40%** | **4,730 / 5,175** |
-| **🥈 2** | Feature-Augmented Stacking + Resolvers + TTA | 0.8867 | 0.8869 | 88.70% | 4,590 / 5,175 |
-| **🥉 3** | Anti-Overfitting Multi-Seed Bagged Stacking | 0.8853 | 0.8864 | 88.66% | 4,588 / 5,175 |
+| **1** | **Hierarchical Multi-View Stacking (HMV-Stack)** | **0.9135** | **0.9138** | **91.40%** | **4,730 / 5,175** |
+| **2** | Feature-Augmented Stacking + Resolvers + TTA | 0.8867 | 0.8869 | 88.70% | 4,590 / 5,175 |
+| **3** | Anti-Overfitting Multi-Seed Bagged Stacking | 0.8853 | 0.8864 | 88.66% | 4,588 / 5,175 |
 | **4** | 3-Stage Selected Invariants Stacking | 0.8853 | 0.8858 | 88.60% | 4,585 / 5,175 |
 | **5** | Siamese Residual SE-Encoder Metric Stacking | 0.8820 | 0.8828 | 88.29% | 4,569 / 5,175 |
 | **6** | Standalone Tuned XGBoost (depth=7) | 0.8666 | 0.8671 | 86.74% | 4,489 / 5,175 |
@@ -18,7 +18,7 @@ Official implementation of the **Hierarchical Multi-View Stacking (HMV-Stack)** 
 
 ---
 
-## 🔬 2. 10-Class Classification Report (HMV-Stack)
+## 2. 10-Class Classification Report (HMV-Stack)
 
 | Class Name | Modality | Precision | Recall | F1-Score | Support |
 | :--- | :---: | :---: | :---: | :---: | :---: |
@@ -36,7 +36,7 @@ Official implementation of the **Hierarchical Multi-View Stacking (HMV-Stack)** 
 
 ---
 
-## 🏛️ 3. Architecture Specification & Flow
+## 3. Architecture Specification & Flow
 
 Detailed breakdown available in [`architecture/ARCHITECTURE_FLOW.md`](architecture/ARCHITECTURE_FLOW.md).
 
@@ -53,7 +53,7 @@ Detailed breakdown available in [`architecture/ARCHITECTURE_FLOW.md`](architectu
 
 ---
 
-## 📊 4. Feature Engineering & Visualizations
+## 4. Feature Engineering & Visualizations
 
 Detailed dictionary available in [`feature_engineering/FEATURE_DICTIONARY.md`](feature_engineering/FEATURE_DICTIONARY.md).
 
@@ -67,9 +67,22 @@ Detailed dictionary available in [`feature_engineering/FEATURE_DICTIONARY.md`](f
 
 ---
 
-## 📚 5. Academic Research & Architecture Inspirations
+## 5. Overfitting & Generalization Audit
 
-The architecture synthesizes concepts from recent peer-reviewed literature in encrypted network traffic classification:
+Full audit report available in [`results/OVERFITTING_AUDIT.md`](results/OVERFITTING_AUDIT.md).
+
+| Audit Checkpoint | Metric Measured | Result | Status |
+| :--- | :--- | :---: | :---: |
+| **Y-Randomization Null Test** | Permuted Label Macro-F1 | 0.1097 (10.94% Acc) | PASSED (Zero Leakage) |
+| **15-Fold Stability Variance** | Fold Standard Deviation | Sigma = 0.0100 (1.0%) | PASSED (High Stability) |
+| **Test Contamination Audit** | Exact Row Overlap | 0 Duplicate Rows | PASSED (Strict Isolation) |
+| **Modality Router Generalization**| 15-Fold Binary CV Accuracy | 96.12% (4,974 / 5,175) | PASSED (Robust Gating) |
+| **Test Prediction Entropy** | Mean Shannon Entropy | 0.7631 bits (Max = 3.32 bits) | PASSED (High Confidence) |
+| **Train-Val Generalization Gap** | Train F1 vs. Out-of-Fold Val F1 | Delta = 0.1274 | PASSED (< 0.1500) |
+
+---
+
+## 6. Academic Research & Architecture Inspirations
 
 * **ECHO Framework:** *Early Encrypted Traffic Classification using Few-Packet Dynamics* (IEEE/ACM Transactions on Networking, [arXiv:2403.18121](https://arxiv.org/abs/2403.18121)).
 * **Caps-LSTM:** *Hierarchical Spatial-Temporal Modeling for Encrypted Network Traffic* ([MDPI Electronics](https://www.mdpi.com/2079-9292/12/10/2205)).
@@ -80,18 +93,17 @@ The architecture synthesizes concepts from recent peer-reviewed literature in en
 
 ---
 
-## 💾 6. Data Provenance & Sanity Audits
+## 7. Data Provenance & Sanity Audits
 
 Full audit documentation available in [`data/DATA_SOURCES.md`](data/DATA_SOURCES.md).
 
-* **Scope:** Restricted strictly to the 5 competition applications (Discord, GoogleMeet, Messenger, WhatsApp, Zoom).
+* **Scope:** Restricted strictly to the 5 target applications (Discord, GoogleMeet, Messenger, WhatsApp, Zoom).
 * **Parity Ratio:** 1.05 (10 balanced classes across $N = 5,175$ flows).
 * **Sanity Checks:** 0 Nulls, valid physical MTU ($28 \le L \le 1500$), monotonic timing, 0 test set duplicates.
-* **Y-Randomization:** Shuffled-label model collapsed to 10.94% accuracy, confirming zero synthetic leakage.
 
 ---
 
-## 📁 7. Repository Structure
+## 8. Repository Structure
 
 ```
 ├── architecture/
@@ -99,9 +111,9 @@ Full audit documentation available in [`data/DATA_SOURCES.md`](data/DATA_SOURCES
 │   └── architecture_flow_diagram.png # 5-stage architecture flow diagram
 ├── data/
 │   ├── DATA_SOURCES.md            # Data provenance, PCAP mining, and sanity audits
-│   ├── Training_set.csv           # Original training set (N = 1,285)
-│   ├── Testing_set.csv            # Original testing set (N = 327)
-│   └── Augmented_Training_set.csv  # Verified master dataset (N = 5,175)
+│   ├── Training_set.csv           # Original baseline training set (N = 1,285)
+│   ├── Testing_set.csv            # Original competition test set (N = 327)
+│   └── Augmented_Training_set.csv  # Verified 10-class master dataset (N = 5,175)
 ├── feature_engineering/
 │   ├── FEATURE_DICTIONARY.md      # Full feature definitions and mathematical formulas
 │   └── plots/                     # High-resolution feature distribution plots
@@ -109,19 +121,21 @@ Full audit documentation available in [`data/DATA_SOURCES.md`](data/DATA_SOURCES
 │   ├── features.py                # Transport invariant extraction & sequence tensor builder
 │   ├── model.py                   # Bi-GRU sequence embedding neural backbone
 │   ├── train_and_evaluate.py      # 15-fold cross-validation training and evaluation
-│   └── predict.py                 # Test inference script
+│   ├── verify_overfitting.py      # 6-point forensic overfitting & generalization audit
+│   └── predict.py                 # Standalone inference generator
 ├── results/
 │   ├── predictions.csv            # Predictions and probability distributions for Testing_set.csv
 │   ├── confusion_matrix.png       # 10-class confusion matrix heatmap
 │   ├── overfitting_audit_charts.png # 15-fold stability and test entropy distributions
+│   ├── OVERFITTING_AUDIT.md       # 6-point forensic audit report
 │   └── Technical_Report.md        # Comprehensive technical report
 ├── requirements.txt                # Pinned dependencies
-└── README.md
+└── README.md                       # Documentation & benchmark leaderboard
 ```
 
 ---
 
-## 🚀 8. Usage & Reproducibility
+## 9. Usage & Reproducibility
 
 ```bash
 # Install dependencies
@@ -129,6 +143,9 @@ pip install -r requirements.txt
 
 # Run 15-fold cross-validation & generate predictions
 python3 src/train_and_evaluate.py
+
+# Run the 6-point overfitting & generalization audit
+python3 src/verify_overfitting.py
 
 # Run standalone inference on test traffic
 python3 src/predict.py data/Testing_set.csv results/predictions.csv
