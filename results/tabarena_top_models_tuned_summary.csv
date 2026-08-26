@@ -1,0 +1,9 @@
+Model,Vanilla F1,Tuned F1,Tuned Accuracy,Gain,Best Parameters
+2. XGBoost (Tuned),0.8638,0.8666,86.74%,+0.0028,"{'n_estimators': 300, 'max_depth': 7, 'learning_rate': 0.05, 'subsample': 0.85, 'colsample_bytree': 0.75, 'tree_method': 'hist'}"
+1. LightGBM (Tuned),0.8633,0.8647,86.57%,+0.0014,"{'n_estimators': 300, 'num_leaves': 31, 'learning_rate': 0.08, 'min_child_samples': 10, 'subsample': 0.9, 'colsample_bytree': 0.8}"
+3. Random Forest (Tuned),0.8592,0.8591,86.07%,-0.0001,"{'n_estimators': 300, 'max_depth': 18, 'min_samples_split': 2, 'max_features': 'log2'}"
+4. Extra Trees (Tuned),0.8525,0.8553,85.66%,+0.0028,"{'n_estimators': 300, 'max_depth': 20, 'min_samples_split': 3, 'max_features': 0.8}"
+5. CatBoost (Tuned),0.8404,0.8486,84.97%,+0.0082,"{'iterations': 400, 'depth': 6, 'learning_rate': 0.07, 'l2_leaf_reg': 3}"
+6. TabPFN v3 (Tuned),0.8344,0.8366,83.77%,+0.0022,"{'softmax_temperature': 0.7, 'n_estimators': 6}"
+7. k-NN (Tuned),0.7807,0.8052,80.73%,+0.0245,"{'n_neighbors': 7, 'weights': 'distance', 'metric': 'manhattan'}"
+8. MLP Neural Net (Tuned),0.7716,0.7904,79.19%,+0.0188,"{'hidden_layer_sizes': (256, 128), 'alpha': 0.0001, 'learning_rate_init': 0.001}"
