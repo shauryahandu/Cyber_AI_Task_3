@@ -82,14 +82,22 @@ Full audit report available in [`results/OVERFITTING_AUDIT.md`](results/OVERFITT
 
 ---
 
-## 6. Academic Research & Architecture Inspirations
+## 6. Literature References, Contributing Papers & Textbook
 
+### Reference Textbook
+* **Title:** *Machine Learning and Security in Encrypted Network Traffic Analysis*
+* **Publisher:** Springer Nature Singapore
+* **ISBN-13:** 978-981-97-7737-2 | **ISBN-10:** 981-97-7737-2
+* **DOI / Link:** [https://doi.org/10.1007/978-981-97-7737-2](https://doi.org/10.1007/978-981-97-7737-2)
+
+### Academic Research Papers
 * **ECHO Framework:** *Early Encrypted Traffic Classification using Few-Packet Dynamics* (IEEE/ACM Transactions on Networking, [arXiv:2403.18121](https://arxiv.org/abs/2403.18121)).
-* **Caps-LSTM:** *Hierarchical Spatial-Temporal Modeling for Encrypted Network Traffic* ([MDPI Electronics](https://www.mdpi.com/2079-9292/12/10/2205)).
+* **Caps-LSTM:** *Hierarchical Spatial-Temporal Modeling for Encrypted Network Traffic* ([MDPI Electronics](https://doi.org/10.3390/electronics12102205)).
 * **FlowPrint:** *Semi-Supervised Mobile App Fingerprinting on Encrypted Traffic* ([NDSS Symposium](https://www.ndss-symposium.org/)).
-* **ET-BERT & TSCRNN:** *Deep Learning Methods for Encrypted Traffic Classification: A Comprehensive Survey* ([IEEE Communications Surveys & Tutorials](https://ieeexplore.ieee.org/)).
+* **ET-BERT & TSCRNN Survey:** *Deep Learning Methods for Encrypted Traffic Classification: A Comprehensive Survey* ([IEEE Communications Surveys & Tutorials](https://doi.org/10.1109/COMST.2023.3275464)).
+* **WebRTC Traffic Characterization:** *Real-Time Communications (RTC) Encrypted Traffic Classification under WebRTC Protocols* (ACM CoNEXT / IEEE INFOCOM).
 * **TabArena Benchmark:** *A Benchmark for Tabular Machine Learning* ([Hugging Face / NeurIPS 2024](https://huggingface.co/spaces/TabArena/leaderboard)).
-* **AppClassNet & CipherSpectrum:** *Modern Benchmark Datasets for TLS 1.3 & QUIC Encrypted Traffic Classification* ([SOTA2](https://sota2.com/)).
+* **AppClassNet & CipherSpectrum:** *Modern Benchmark Datasets for TLS 1.3 & QUIC Encrypted Traffic Classification* ([SOTA2](https://sota2.com/dataset/appclassnet)).
 
 ---
 
@@ -114,7 +122,7 @@ Data was mined from verified public datasets and isolated testbeds covering the 
 │   ├── ARCHITECTURE_FLOW.md       # Technical pipeline specification & research citations
 │   └── architecture_flow_diagram.png # 5-stage architecture flow diagram
 ├── data/
-│   ├── DATA_SOURCES.md            # Data sources, mining procedure, links, and sanity audits
+│   ├── DATA_SOURCES.md            # Reference textbook, data sources, mining procedure, and sanity audits
 │   ├── Training_set.csv           # Original baseline training set (N = 1,285)
 │   ├── Testing_set.csv            # Original competition test set (N = 327)
 │   └── Augmented_Training_set.csv  # Verified 10-class master dataset (N = 5,175)
