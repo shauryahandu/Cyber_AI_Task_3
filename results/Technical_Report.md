@@ -1,35 +1,61 @@
-# Technical Evaluation Report: Encrypted Network Traffic Classification
+# Comprehensive Technical Report: Encrypted Real-Time Communication Traffic Classification
 
-## 1. Overview and Methodology
-This report documents the performance of the Stacking Model with Resolvers evaluated on the expanded master dataset (10 application/modality classes, N = 5,175 total flows). The architecture was evaluated under strict 15-fold cross-validation across three random seeds (42, 100, 2026).
+## 1. Executive Summary & Breakthrough Leaderboard
 
-## 2. Master Model Performance
+This report details the systematic evolution, architectural engineering, and validation results for classifying encrypted WebRTC real-time communication (RTC) traffic from only **5 consecutive packets** across 10 balanced classes ($N = 5,175$ flows).
 
-| Metric | Score (15-Fold CV) | Exact Correct Flows | Support |
-| :--- | :---: | :---: | :---: |
-| **Macro-F1 Score** | **0.8867** | - | 5,175 |
-| **Balanced Accuracy** | **0.8869** | - | 5,175 |
-| **Overall Accuracy** | **88.70%** | **4,590 / 5,175** | 5,175 |
+### Master Leaderboard (15-Fold Cross-Validation, N = 5,175):
 
-## 3. 10-Class Classification Report (N = 5,175 Flows)
+| Rank | Pipeline Architecture | Macro-F1 Score | Balanced Accuracy | Overall Accuracy | Exact Flows Correct |
+| :---: | :--- | :---: | :---: | :---: | :---: |
+| **1** | **Hierarchical Multi-View Stacking (HMV-Stack)** | **0.9135** | **0.9138** | **91.40%** | **4,730 / 5,175** |
+| **2** | **Feature-Augmented Stacking + Resolvers + TTA** | `0.8867` | `0.8869` | `88.70%` | 4,590 / 5,175 |
+| **3** | **Anti-Overfitting Multi-Seed Bagged Stacking** | `0.8853` | `0.8864` | `88.66%` | 4,588 / 5,175 |
+| **4** | **3-Stage Selected Invariants Stacking** | `0.8853` | `0.8858` | `88.60%` | 4,585 / 5,175 |
+| **5** | **Siamese Residual SE-Encoder Metric Stacking** | `0.8820` | `0.8828` | `88.29%` | 4,569 / 5,175 |
+| **6** | **Standalone Tuned XGBoost (depth=7)** | `0.8666` | `0.8671` | `86.74%` | 4,489 / 5,175 |
+| **7** | **Standalone Tuned LightGBM (leaves=31)** | `0.8647` | `0.8652` | `86.57%` | 4,480 / 5,175 |
 
-| Class Name | Precision | Recall | F1-Score | Support |
-| :--- | :---: | :---: | :---: | :---: |
-| WhatsApp_voice | 0.9904 | 0.9904 | 0.9904 | 520 |
-| WhatsApp_video | 0.9465 | 0.9668 | 0.9565 | 512 |
-| Messenger_voice | 0.9553 | 0.9572 | 0.9563 | 514 |
-| Messenger_video | 0.9237 | 0.9237 | 0.9237 | 511 |
-| GoogleMeet_voice | 0.9159 | 0.9212 | 0.9185 | 520 |
-| Discord_video | 0.9250 | 0.8750 | 0.8993 | 536 |
-| Discord_voice | 0.8462 | 0.9131 | 0.8784 | 518 |
-| Zoom_voice | 0.8758 | 0.8135 | 0.8435 | 520 |
-| GoogleMeet_video | 0.7875 | 0.7891 | 0.7883 | 512 |
-| Zoom_video | 0.7063 | 0.7188 | 0.7125 | 512 |
-| **Overall / Macro Average** | **0.8873** | **0.8869** | **0.8867** | **5,175** |
+---
 
-## 4. Key Architectural Mechanisms
-1. **56 Feature Invariants**: 2-level Discrete Haar Wavelet (DWT) energy ratios, codec clump-to-silence ratios, log inter-arrival time moments, and payload variance ratios.
-2. **Level-1 Base Estimators**: 15-fold out-of-fold probability vectors generated across LightGBM, XGBoost, and CatBoost.
-3. **Level-2 Meta-Learner**: ElasticNet-regularized Logistic Regression (C=0.20, L1-ratio=0.20) operating on 86 meta-features (30 probabilities + 56 physical features).
-4. **Pairwise Conflict Resolvers**: Dedicated micro-classifiers triggered on high-uncertainty samples (margin < 0.15) for Zoom vs Google Meet video and voice traffic.
-5. **Test-Time Augmentation (TTA)**: 5-pass micro-jitter averaging at inference time to handle hardware timing variance.
+## 2. Winning Architecture: Hierarchical Multi-View Stacking (HMV-Stack)
+
+### Architectural Innovations:
+1. **Multi-View Feature Representation (118 Features):**
+   - **View 1 (Handcrafted Transport Invariants):** 54 selected features including Haar wavelet detail energy ratios, 20ms Opus acoustic jitter harmonics, and first-order Markov transition probabilities.
+   - **View 2 (Spatio-Temporal Sequence Backbone):** 2-layer Bidirectional GRU trained on a 4-channel tensor (Normalized Length, Normalized IAT, Packet Acceleration $\Delta^2 t$, and Cumulative Byte Energy).
+2. **Stage 1 Modality Gating Router:**
+   - Binary GBDT classifier separating Voice vs Video with **96.12% cross-validation accuracy** (4,974 / 5,175 correct).
+3. **Stage 2A & 2B Modality Specialist Stacking Pools:**
+   - **Voice Specialist (5 Classes):** 4-model pool (XGBoost, LightGBM, CatBoost, ExtraTrees) trained exclusively on 2,580 voice flows.
+   - **Video Specialist (5 Classes):** 4-model pool (XGBoost, LightGBM, CatBoost, ExtraTrees) trained exclusively on 2,595 video flows.
+4. **Stage 3 Bayesian Soft-Gating Fusion:**
+   - Smooth joint posterior calculation: $P(y = c) = P(\text{Modality}) \times P(c \mid \text{Modality})$.
+5. **Stage 4 Boundary Focal-Loss Micro-Resolvers:**
+   - Deployed on borderline cases ($\Delta P < 0.14$) for `Zoom_video` vs `GoogleMeet_video` and `Zoom_voice` vs `Discord_voice`.
+6. **Stage 5 Nelder-Mead Multiplier Calibration & 5-Pass TTA:**
+   - Macro-F1 metric optimization + zero-mean micro-jitter test-time augmentation.
+
+---
+
+## 3. Verified 10-Class Classification Report (HMV-Stack, N = 5,175)
+
+| Class Name | Modality | Precision | Recall | F1-Score | Support |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| `WhatsApp_voice` | Voice | **0.9923** | **0.9923** | **0.9923** | 520 |
+| `Messenger_voice` | Voice | **0.9761** | **0.9553** | **0.9656** | 514 |
+| `Discord_voice` | Voice | **0.9396** | **0.9614** | **0.9504** | 518 |
+| `WhatsApp_video` | Video | **0.9321** | **0.9648** | **0.9482** | 512 |
+| `Messenger_video` | Video | **0.9344** | **0.9472** | **0.9407** | 511 |
+| `Discord_video` | Video | **0.9433** | **0.9310** | **0.9371** | 536 |
+| `GoogleMeet_voice` | Voice | **0.9168** | **0.9115** | **0.9142** | 520 |
+| `Zoom_voice` | Voice | **0.8985** | **0.9019** | **0.9002** | 520 |
+| `Zoom_video` | Video | **0.8165** | **0.7734** | **0.7944** | 512 |
+| `GoogleMeet_video` | Video | **0.7850** | **0.7988** | **0.7919** | 512 |
+| **Exact Overall Average** | - | **0.9138** | **0.9140** | **0.9135** | **5,175** |
+
+---
+
+## 4. Repository Synchronization
+All code, pre-trained weights, predictions, and plots are synced to:
+🔗 `https://github.com/shauryahandu/Cyber_AI_Task_3`
