@@ -1,6 +1,6 @@
-# Data Sources, Mining Procedure, and Provenance Specification
+# Data Sources, Mining Procedure, and Audio Processing Specification
 
-This document details the data sources, repository links, mining pipeline, and sanity audits used to construct the **Master Encrypted RTC Dataset (N = 5,175 flows)**.
+This document details the data sources, repository links, mining pipeline, audio-to-CSV converters, and sanity audits used to construct the **Master Encrypted RTC Dataset (N = 5,175 flows)**.
 
 ---
 
@@ -33,38 +33,27 @@ Data mining strictly encompasses the 5 target applications:
 
 ---
 
-## 3. Data Mining Procedure
+## 3. Data Mining and Audio-to-CSV Procedures
 
-The data mining workflow extracts standardized 5-packet encrypted flows from raw packet traces:
+### A. Raw PCAP Flow Extraction
+The PCAP mining routine parses raw network captures and sliding windows:
+* Script: [`src/data_mining.py`](../src/data_mining.py)
+* Command:
+  ```bash
+  python3 src/data_mining.py data/raw_captures data/Augmented_Training_set.csv
+  ```
 
-```
-[ Raw Network PCAP / Packet Capture Traces ]
-                       │
-                       ▼
-    [ STEP 1: Transport & Media Stream Isolation ]
-      • Isolate UDP/SRTP WebRTC audio and video RTP streams
-      • Filter out non-media traffic (STUN / TURN / ICE keepalives, TLS handshakes)
-                       │
-                       ▼
-    [ STEP 2: Physical Boundary Sanity Filter ]
-      • Enforce standard Ethernet MTU constraints: 28 <= Packet Length <= 1500 bytes
-      • Discard zero-length, corrupted, or retransmitted malformed packets
-                       │
-                       ▼
-    [ STEP 3: Consecutive 5-Packet Sliding Window Extraction ]
-      • Extract sliding windows of size W = 5 consecutive packets (stride S = 1)
-      • Compute relative arrival timestamps: rel_time_i = t_i - t_0 (where t_0 = 0.0)
-      • Verify strict time monotonicity: rel_time_0 < rel_time_1 < ... < rel_time_4
-                       │
-                       ▼
-    [ STEP 4: Class Balance Parity Enforcement ]
-      • Subsample mined streams to achieve an exact target of ~520 flows per class
-      • Attain 1.05 parity balance across all 10 classes (5 applications x 2 modalities)
-                       │
-                       ▼
-    [ STEP 5: Test Set Contamination Audit ]
-      • Verify 0 exact duplicate rows against unseen test set (Testing_set.csv)
-```
+### B. Raw Audio-to-CSV Conversion
+The audio conversion utility transforms raw WAV audio traces into the exact 5-packet flow schema:
+* Script: [`src/audio_to_csv.py`](../src/audio_to_csv.py)
+* Processing:
+  1. Frames raw PCM audio into standard 20ms Opus frames.
+  2. Computes RMS energy and simulates dynamic bit-rate packet sizing.
+  3. Extracts sliding 5-packet windows with relative arrival timestamps.
+* Command:
+  ```bash
+  python3 src/audio_to_csv.py data/audio_raw data/audio_extracted_flows.csv
+  ```
 
 ---
 
@@ -94,15 +83,3 @@ The data mining workflow extracts standardized 5-packet encrypted flows from raw
 * **Ethernet MTU Constraints:** $28 \le L_i \le 1500$ bytes for all packets.
 * **Test Set Isolation:** 0 duplicate rows found between `Augmented_Training_set.csv` and `Testing_set.csv` ($N = 327$).
 * **Y-Randomization Test:** Shuffled label model collapsed to 10.94% accuracy, proving zero synthetic leakage.
-
----
-
-## 6. Execution Script
-
-The automated data mining routine is implemented in:
-* [`src/data_mining.py`](../src/data_mining.py)
-
-```bash
-# Run flow extraction and dataset construction
-python3 src/data_mining.py data/raw_captures data/Augmented_Training_set.csv
-```

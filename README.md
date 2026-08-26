@@ -123,6 +123,7 @@ Data was mined from verified public datasets and isolated testbeds covering the 
 │   └── plots/                     # High-resolution feature distribution plots
 ├── src/
 │   ├── data_mining.py             # PCAP parsing & 5-packet window extraction routine
+│   ├── audio_to_csv.py            # Audio WAV framing & flow conversion utility
 │   ├── features.py                # Transport invariant extraction & sequence tensor builder
 │   ├── model.py                   # Bi-GRU sequence embedding neural backbone
 │   ├── train_and_evaluate.py      # 15-fold cross-validation training and evaluation
@@ -146,8 +147,11 @@ Data was mined from verified public datasets and isolated testbeds covering the 
 # Install dependencies
 pip install -r requirements.txt
 
-# Run data mining and flow extraction
+# Run PCAP data mining and flow extraction
 python3 src/data_mining.py data/raw_captures data/Augmented_Training_set.csv
+
+# Run audio WAV to packet flow conversion
+python3 src/audio_to_csv.py data/audio_raw data/audio_extracted_flows.csv
 
 # Run 15-fold cross-validation & generate predictions
 python3 src/train_and_evaluate.py
