@@ -21,7 +21,7 @@ The feature representation fuses two complementary views of the 5-packet network
 
 ### B. Discrete Wavelet Energy Decomposition (Haar Wavelet)
 * `haar_energy_ratio`: Ratio of high-frequency detail wavelet energy to low-frequency approximation energy across packet lengths:
-  $$\frac{h_{d0}^2 + h_{d1}^2}{h_{a0}^2 + h_{a1}^2 + 10^{-9}}$$
+ $$\frac{h_{d0}^2 + h_{d1}^2}{h_{a0}^2 + h_{a1}^2 + 10^{-9}}$$
 * `haar_timing_ratio`: Detail-to-approximation energy ratio across inter-arrival times.
 
 ### C. First-Order Markov Transition Probabilities
@@ -38,7 +38,7 @@ The feature representation fuses two complementary views of the 5-packet network
 
 ### E. Information-Theoretic Entropy
 * `packet_length_entropy`: Shannon entropy over 100-byte binned payload distribution:
-  $$H(L) = -\sum p_i \log_2(p_i)$$
+ $$H(L) = -\sum p_i \log_2(p_i)$$
 
 ### F. Transport Dynamics & Autocorrelation
 * `byte_rate`: Instantaneous flow throughput $\sum L_i / t_4$.
@@ -63,8 +63,8 @@ $$\text{Conv1D}(4 \to 32) \to \text{BatchNorm} \to \text{ReLU} \to \text{Bi-GRU}
 
 ## 4. Visualizations
 
-* 📊 **Top 25 Feature Importance:** [`plots/top_25_features_importance.png`](plots/top_25_features_importance.png)
-* 📈 **Packet Length Distributions:** [`plots/packet_length_distributions.png`](plots/packet_length_distributions.png)
-* 🔬 **Throughput vs. Jitter Phase Space:** [`plots/iat_jitter_separation.png`](plots/iat_jitter_separation.png)
-* 🎵 **Harmonic & Pacing Separation:** [`plots/harmonic_and_pacing_separation.png`](plots/harmonic_and_pacing_separation.png)
-* 📉 **Entropy vs. Payload Variance:** [`plots/duty_cycle_and_entropy.png`](plots/duty_cycle_and_entropy.png)
+* **Top 25 Feature Importance:** [`plots/top_25_features_importance.png`](plots/top_25_features_importance.png)
+* **Packet Length Distributions:** [`plots/packet_length_distributions.png`](plots/packet_length_distributions.png)
+* **Throughput vs. Jitter Phase Space:** [`plots/iat_jitter_separation.png`](plots/iat_jitter_separation.png)
+* **Harmonic & Pacing Separation:** [`plots/harmonic_and_pacing_separation.png`](plots/harmonic_and_pacing_separation.png)
+* **Entropy vs. Payload Variance:** [`plots/duty_cycle_and_entropy.png`](plots/duty_cycle_and_entropy.png)

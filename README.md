@@ -43,8 +43,8 @@ Detailed breakdown available in [`architecture/ARCHITECTURE_FLOW.md`](architectu
 ![Architecture Flow Diagram](architecture/architecture_flow_diagram.png)
 
 1. **Multi-View Feature Fusion (118 Features):**
-   - **View 1 (54 Handcrafted Invariants):** Haar wavelet energy ratios, Opus 20ms NetEQ acoustic harmonics, first-order Markov transitions.
-   - **View 2 (Spatio-Temporal Sequence):** 2-layer Bidirectional GRU trained on a 4-channel tensor (Length, IAT, Acceleration, Cumulative Energy).
+ - **View 1 (54 Handcrafted Invariants):** Haar wavelet energy ratios, Opus 20ms NetEQ acoustic harmonics, first-order Markov transitions.
+ - **View 2 (Spatio-Temporal Sequence):** 2-layer Bidirectional GRU trained on a 4-channel tensor (Length, IAT, Acceleration, Cumulative Energy).
 2. **Stage 1 Modality Router:** Calibrated binary GBDT classifier separating Voice vs Video with **96.12% accuracy**.
 3. **Stage 2A & 2B Modality Specialist Pools:** Two 4-model stacking ensembles (XGBoost, LightGBM, CatBoost, ExtraTrees) dedicated separately to Voice ($N=2,580$) and Video ($N=2,595$).
 4. **Stage 3 Bayesian Soft-Gating:** Smooth joint posterior probability calculation: $P(y = c) = P(\text{Modality}) \times P(c \mid \text{Modality})$.
@@ -107,32 +107,32 @@ Full procedure and provenance documentation available in [`data/DATA_SOURCES.md`
 ## 8. Repository Structure
 
 ```
-├── architecture/
-│   ├── ARCHITECTURE_FLOW.md       # Technical pipeline specification & research citations
-│   └── architecture_flow_diagram.png # 5-stage architecture flow diagram
-├── data/
-│   ├── DATA_SOURCES.md            # Data mining procedure, provenance, and sanity audits
-│   ├── Training_set.csv           # Original baseline training set (N = 1,285)
-│   ├── Testing_set.csv            # Original competition test set (N = 327)
-│   └── Augmented_Training_set.csv  # Verified 10-class master dataset (N = 5,175)
-├── feature_engineering/
-│   ├── FEATURE_DICTIONARY.md      # Full feature definitions and mathematical formulas
-│   └── plots/                     # High-resolution feature distribution plots
-├── src/
-│   ├── data_mining.py             # PCAP parsing & 5-packet window extraction routine
-│   ├── features.py                # Transport invariant extraction & sequence tensor builder
-│   ├── model.py                   # Bi-GRU sequence embedding neural backbone
-│   ├── train_and_evaluate.py      # 15-fold cross-validation training and evaluation
-│   ├── verify_overfitting.py      # 6-point forensic overfitting & generalization audit
-│   └── predict.py                 # Standalone inference generator
-├── results/
-│   ├── predictions.csv            # Predictions and probability distributions for Testing_set.csv
-│   ├── confusion_matrix.png       # 10-class confusion matrix heatmap
-│   ├── overfitting_audit_charts.png # 15-fold stability and test entropy distributions
-│   ├── OVERFITTING_AUDIT.md       # 6-point forensic audit report
-│   └── Technical_Report.md        # Comprehensive technical report
-├── requirements.txt                # Pinned dependencies
-└── README.md                       # Documentation & benchmark leaderboard
+ architecture/
+ ARCHITECTURE_FLOW.md # Technical pipeline specification & research citations
+ architecture_flow_diagram.png # 5-stage architecture flow diagram
+ data/
+ DATA_SOURCES.md # Data mining procedure, provenance, and sanity audits
+ Training_set.csv # Original baseline training set (N = 1,285)
+ Testing_set.csv # Original competition test set (N = 327)
+ Augmented_Training_set.csv # Verified 10-class master dataset (N = 5,175)
+ feature_engineering/
+ FEATURE_DICTIONARY.md # Full feature definitions and mathematical formulas
+ plots/ # High-resolution feature distribution plots
+ src/
+ data_mining.py # PCAP parsing & 5-packet window extraction routine
+ features.py # Transport invariant extraction & sequence tensor builder
+ model.py # Bi-GRU sequence embedding neural backbone
+ train_and_evaluate.py # 15-fold cross-validation training and evaluation
+ verify_overfitting.py # 6-point forensic overfitting & generalization audit
+ predict.py # Standalone inference generator
+ results/
+ predictions.csv # Predictions and probability distributions for Testing_set.csv
+ confusion_matrix.png # 10-class confusion matrix heatmap
+ overfitting_audit_charts.png # 15-fold stability and test entropy distributions
+ OVERFITTING_AUDIT.md # 6-point forensic audit report
+ Technical_Report.md # Comprehensive technical report
+ requirements.txt # Pinned dependencies
+ README.md # Documentation & benchmark leaderboard
 ```
 
 ---

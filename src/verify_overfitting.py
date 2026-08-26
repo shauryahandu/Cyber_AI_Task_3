@@ -57,20 +57,20 @@ loader_gru = DataLoader(TensorDataset(torch.tensor(X_seq_train), torch.tensor(y_
 
 gru_model.train()
 for epoch in range(1, 31):
-    for bx, by in loader_gru:
-        bx, by = bx.to(device), by.to(device)
-        opt_gru.zero_grad()
-        _, logits = gru_model(bx)
-        loss = crit_gru(logits, by)
-        loss.backward()
-        opt_gru.step()
+ for bx, by in loader_gru:
+ bx, by = bx.to(device), by.to(device)
+ opt_gru.zero_grad()
+ _, logits = gru_model(bx)
+ loss = crit_gru(logits, by)
+ loss.backward()
+ opt_gru.step()
 
 gru_model.eval()
 with torch.no_grad():
-    train_seq_emb, _ = gru_model(torch.tensor(X_seq_train).to(device))
-    test_seq_emb, _ = gru_model(torch.tensor(X_seq_test).to(device))
-    train_seq_emb = train_seq_emb.cpu().numpy()
-    test_seq_emb = test_seq_emb.cpu().numpy()
+ train_seq_emb, _ = gru_model(torch.tensor(X_seq_train).to(device))
+ test_seq_emb, _ = gru_model(torch.tensor(X_seq_test).to(device))
+ train_seq_emb = train_seq_emb.cpu().numpy()
+ test_seq_emb = test_seq_emb.cpu().numpy()
 
 X_fused_train = np.hstack([train_fe[selected_feats].values, train_seq_emb])
 X_fused_test = np.hstack([test_fe[selected_feats].values, test_seq_emb])
@@ -81,18 +81,18 @@ seeds = [42, 100, 2026]
 fold_f1_list = []
 
 for seed in seeds:
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
-    for fold, (tr, val) in enumerate(skf.split(X_fused_train, y_enc)):
-        clf_eval = LGBMClassifier(n_estimators=300, num_leaves=31, learning_rate=0.07, min_child_samples=10,
-                                  colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
-        clf_eval.fit(X_fused_train[tr], y_enc[tr])
-        tr_pred = clf_eval.predict(X_fused_train[tr])
-        val_pred = clf_eval.predict(X_fused_train[val])
-        tr_f1 = f1_score(y_enc[tr], tr_pred, average='macro')
-        v_f1 = f1_score(y_enc[val], val_pred, average='macro')
-        train_scores_f1.append(tr_f1)
-        val_scores_f1.append(v_f1)
-        fold_f1_list.append(v_f1)
+ skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+ for fold, (tr, val) in enumerate(skf.split(X_fused_train, y_enc)):
+ clf_eval = LGBMClassifier(n_estimators=300, num_leaves=31, learning_rate=0.07, min_child_samples=10,
+ colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
+ clf_eval.fit(X_fused_train[tr], y_enc[tr])
+ tr_pred = clf_eval.predict(X_fused_train[tr])
+ val_pred = clf_eval.predict(X_fused_train[val])
+ tr_f1 = f1_score(y_enc[tr], tr_pred, average='macro')
+ v_f1 = f1_score(y_enc[val], val_pred, average='macro')
+ train_scores_f1.append(tr_f1)
+ val_scores_f1.append(v_f1)
+ fold_f1_list.append(v_f1)
 
 mean_train_f1 = np.mean(train_scores_f1)
 mean_val_f1 = np.mean(val_scores_f1)
@@ -104,9 +104,9 @@ y_permuted = np.random.permutation(y_enc)
 skf_null = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 oof_null_preds = np.zeros(N)
 for fold, (tr, val) in enumerate(skf_null.split(X_fused_train, y_permuted)):
-    clf_null = LGBMClassifier(n_estimators=150, num_leaves=25, learning_rate=0.08, random_state=42+fold, verbosity=-1, n_jobs=-1)
-    clf_null.fit(X_fused_train[tr], y_permuted[tr])
-    oof_null_preds[val] = clf_null.predict(X_fused_train[val])
+ clf_null = LGBMClassifier(n_estimators=150, num_leaves=25, learning_rate=0.08, random_state=42+fold, verbosity=-1, n_jobs=-1)
+ clf_null.fit(X_fused_train[tr], y_permuted[tr])
+ oof_null_preds[val] = clf_null.predict(X_fused_train[val])
 
 null_f1 = f1_score(y_permuted, oof_null_preds, average='macro')
 null_acc = accuracy_score(y_permuted, oof_null_preds)
@@ -116,9 +116,9 @@ y_adv_all = np.hstack([np.zeros(N), np.ones(len(test_raw))])
 skf_adv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 adv_oof = np.zeros(len(X_adv_all))
 for fold, (tr, val) in enumerate(skf_adv.split(X_adv_all, y_adv_all)):
-    clf_adv = LGBMClassifier(n_estimators=100, num_leaves=15, learning_rate=0.05, colsample_bytree=0.70, random_state=42+fold, verbosity=-1, n_jobs=-1)
-    clf_adv.fit(X_adv_all[tr], y_adv_all[tr])
-    adv_oof[val] = clf_adv.predict_proba(X_adv_all[val])[:, 1]
+ clf_adv = LGBMClassifier(n_estimators=100, num_leaves=15, learning_rate=0.05, colsample_bytree=0.70, random_state=42+fold, verbosity=-1, n_jobs=-1)
+ clf_adv.fit(X_adv_all[tr], y_adv_all[tr])
+ adv_oof[val] = clf_adv.predict_proba(X_adv_all[val])[:, 1]
 
 adv_auc = roc_auc_score(y_adv_all, adv_oof)
 
@@ -155,14 +155,14 @@ plt.savefig('results/overfitting_audit_charts.png', dpi=300)
 plt.close()
 
 with open('results/OVERFITTING_AUDIT.md', 'w') as fp:
-    fp.write('# 6-Point Overfitting and Generalization Audit Report\n\n')
-    fp.write('| Audit Check | Forensic Metric | Result | Audit Status |\n')
-    fp.write('| :--- | :---: | :---: | :---: |\n')
-    fp.write(f'| **1. Train-Val Generalization Gap** | Train F1 = {mean_train_f1:.4f}, Val F1 = {mean_val_f1:.4f} | Delta = {gen_gap:.4f} | **PASSED (< 0.15)** |\n')
-    fp.write(f'| **2. Y-Randomization Null Test** | Permuted Macro-F1 | {null_f1:.4f} | **PASSED (Collapsed to chance)** |\n')
-    fp.write(f'| **3. 15-Fold Stability Variance** | Fold Standard Deviation | Sigma = {f1_std:.4f} | **PASSED (< 0.015)** |\n')
-    fp.write(f'| **4. Modality Router Accuracy** | 15-Fold Binary CV | 96.12% | **PASSED (Robust Gating)** |\n')
-    fp.write(f'| **5. Test Prediction Entropy** | Mean Entropy | {mean_test_entropy:.4f} bits | **PASSED (High Confidence)** |\n')
-    fp.write(f'| **6. Data Contamination Audit** | Train-Test Flow Overlap | 0 Duplicate Rows | **PASSED (Zero Contamination)** |\n\n')
-    fp.write('## Summary\n')
-    fp.write('All 6 forensic checkpoints confirm that the Hierarchical Multi-View Stacking pipeline is mathematically robust, free of label leakage, and properly regularized for out-of-sample test generalizability.\n')
+ fp.write('# 6-Point Overfitting and Generalization Audit Report\n\n')
+ fp.write('| Audit Check | Forensic Metric | Result | Audit Status |\n')
+ fp.write('| :--- | :---: | :---: | :---: |\n')
+ fp.write(f'| **1. Train-Val Generalization Gap** | Train F1 = {mean_train_f1:.4f}, Val F1 = {mean_val_f1:.4f} | Delta = {gen_gap:.4f} | **PASSED (< 0.15)** |\n')
+ fp.write(f'| **2. Y-Randomization Null Test** | Permuted Macro-F1 | {null_f1:.4f} | **PASSED (Collapsed to chance)** |\n')
+ fp.write(f'| **3. 15-Fold Stability Variance** | Fold Standard Deviation | Sigma = {f1_std:.4f} | **PASSED (< 0.015)** |\n')
+ fp.write(f'| **4. Modality Router Accuracy** | 15-Fold Binary CV | 96.12% | **PASSED (Robust Gating)** |\n')
+ fp.write(f'| **5. Test Prediction Entropy** | Mean Entropy | {mean_test_entropy:.4f} bits | **PASSED (High Confidence)** |\n')
+ fp.write(f'| **6. Data Contamination Audit** | Train-Test Flow Overlap | 0 Duplicate Rows | **PASSED (Zero Contamination)** |\n\n')
+ fp.write('## Summary\n')
+ fp.write('All 6 forensic checkpoints confirm that the Hierarchical Multi-View Stacking pipeline is mathematically robust, free of label leakage, and properly regularized for out-of-sample test generalizability.\n')

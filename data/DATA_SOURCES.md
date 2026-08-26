@@ -10,31 +10,31 @@ The data mining workflow extracts standardized 5-packet encrypted flows from raw
 
 ```
 [ Raw Network PCAP / Packet Capture ]
-                 │
-                 ▼
+ 
+ 
 [ Step 1: Media Stream Filtering ]
-  • Isolate UDP/SRTP WebRTC audio and video media streams
-  • Filter out non-media traffic (STUN / TURN / ICE keepalives, TLS handshakes)
-                 │
-                 ▼
+ • Isolate UDP/SRTP WebRTC audio and video media streams
+ • Filter out non-media traffic (STUN / TURN / ICE keepalives, TLS handshakes)
+ 
+ 
 [ Step 2: Physical Boundary Sanity Filter ]
-  • Enforce standard Ethernet MTU constraints: 28 <= Packet Length <= 1500 bytes
-  • Discard zero-length, corrupted, or retransmitted malformed packets
-                 │
-                 ▼
+ • Enforce standard Ethernet MTU constraints: 28 <= Packet Length <= 1500 bytes
+ • Discard zero-length, corrupted, or retransmitted malformed packets
+ 
+ 
 [ Step 3: Consecutive 5-Packet Sliding Window Extraction ]
-  • Extract sliding windows of size W = 5 consecutive packets (stride S = 1)
-  • Compute relative inter-arrival timestamps: rel_time_i = t_i - t_0 (where t_0 = 0.0)
-  • Verify strict time monotonicity: rel_time_0 < rel_time_1 < ... < rel_time_4
-                 │
-                 ▼
+ • Extract sliding windows of size W = 5 consecutive packets (stride S = 1)
+ • Compute relative inter-arrival timestamps: rel_time_i = t_i - t_0 (where t_0 = 0.0)
+ • Verify strict time monotonicity: rel_time_0 < rel_time_1 < ... < rel_time_4
+ 
+ 
 [ Step 4: Class Balance Parity Enforcement ]
-  • Subsample mined streams to achieve an exact target of ~520 flows per class
-  • Attain 1.05 parity balance across all 10 classes (5 applications x 2 modalities)
-                 │
-                 ▼
+ • Subsample mined streams to achieve an exact target of ~520 flows per class
+ • Attain 1.05 parity balance across all 10 classes (5 applications x 2 modalities)
+ 
+ 
 [ Step 5: Test Set Contamination Audit ]
-  • Verify 0 exact duplicate rows against unseen test set (Testing_set.csv)
+ • Verify 0 exact duplicate rows against unseen test set (Testing_set.csv)
 ```
 
 ---

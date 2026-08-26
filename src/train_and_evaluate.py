@@ -72,20 +72,20 @@ loader_gru = DataLoader(TensorDataset(torch.tensor(X_seq_train), torch.tensor(y_
 
 gru_model.train()
 for epoch in range(1, 31):
-    for bx, by in loader_gru:
-        bx, by = bx.to(device), by.to(device)
-        opt_gru.zero_grad()
-        _, logits = gru_model(bx)
-        loss = crit_gru(logits, by)
-        loss.backward()
-        opt_gru.step()
+ for bx, by in loader_gru:
+ bx, by = bx.to(device), by.to(device)
+ opt_gru.zero_grad()
+ _, logits = gru_model(bx)
+ loss = crit_gru(logits, by)
+ loss.backward()
+ opt_gru.step()
 
 gru_model.eval()
 with torch.no_grad():
-    train_seq_emb, _ = gru_model(torch.tensor(X_seq_train).to(device))
-    test_seq_emb, _ = gru_model(torch.tensor(X_seq_test).to(device))
-    train_seq_emb = train_seq_emb.cpu().numpy()
-    test_seq_emb = test_seq_emb.cpu().numpy()
+ train_seq_emb, _ = gru_model(torch.tensor(X_seq_train).to(device))
+ test_seq_emb, _ = gru_model(torch.tensor(X_seq_test).to(device))
+ train_seq_emb = train_seq_emb.cpu().numpy()
+ test_seq_emb = test_seq_emb.cpu().numpy()
 
 X_fused_train = np.hstack([train_fe[selected_feats].values, train_seq_emb])
 X_fused_test = np.hstack([test_fe[selected_feats].values, test_seq_emb])
@@ -95,11 +95,11 @@ test_modality = np.zeros(len(test_raw))
 
 skf_m = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 for fold, (tr, val) in enumerate(skf_m.split(X_fused_train, y_modality)):
-    clf_m = LGBMClassifier(n_estimators=300, num_leaves=31, learning_rate=0.07, min_child_samples=10,
-                           colsample_bytree=0.75, subsample=0.85, random_state=42+fold, verbosity=-1, n_jobs=-1)
-    clf_m.fit(X_fused_train[tr], y_modality[tr])
-    oof_modality[val] = clf_m.predict_proba(X_fused_train[val])[:, 1]
-    test_modality += clf_m.predict_proba(X_fused_test)[:, 1] / 5.0
+ clf_m = LGBMClassifier(n_estimators=300, num_leaves=31, learning_rate=0.07, min_child_samples=10,
+ colsample_bytree=0.75, subsample=0.85, random_state=42+fold, verbosity=-1, n_jobs=-1)
+ clf_m.fit(X_fused_train[tr], y_modality[tr])
+ oof_modality[val] = clf_m.predict_proba(X_fused_train[val])[:, 1]
+ test_modality += clf_m.predict_proba(X_fused_test)[:, 1] / 5.0
 
 mod_acc = accuracy_score(y_modality, (oof_modality >= 0.50).astype(int))
 
@@ -115,76 +115,76 @@ X_video_sub = X_fused_train[video_mask_all]
 y_video_sub = y_enc_video
 
 for seed in seeds:
-    skf_v = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
-    for fold, (tr_v, val_v) in enumerate(skf_v.split(X_voice_sub, y_voice_sub)):
-        orig_val_idx = np.where(voice_mask_all)[0][val_v]
-        
-        clf_lgb_v = LGBMClassifier(n_estimators=300, num_leaves=25, learning_rate=0.07, min_child_samples=10,
-                                   colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
-        clf_xgb_v = XGBClassifier(n_estimators=300, max_depth=6, learning_rate=0.05, subsample=0.80,
-                                  colsample_bytree=0.75, tree_method='hist', random_state=seed+fold, n_jobs=-1)
-        clf_cat_v = CatBoostClassifier(iterations=350, depth=6, learning_rate=0.06, l2_leaf_reg=3,
-                                       random_seed=seed+fold, verbose=0, thread_count=-1)
-        clf_et_v  = ExtraTreesClassifier(n_estimators=300, max_depth=18, min_samples_split=3, random_state=seed+fold, n_jobs=-1)
-        
-        clf_lgb_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
-        clf_xgb_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
-        clf_cat_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
-        clf_et_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
-        
-        p_val_v = (0.35 * clf_lgb_v.predict_proba(X_voice_sub[val_v]) + 
-                   0.35 * clf_xgb_v.predict_proba(X_voice_sub[val_v]) + 
-                   0.15 * clf_cat_v.predict_proba(X_voice_sub[val_v]) + 
-                   0.15 * clf_et_v.predict_proba(X_voice_sub[val_v]))
-        oof_voice_probs[orig_val_idx] += p_val_v / float(len(seeds))
-        
-        p_test_v = (0.35 * clf_lgb_v.predict_proba(X_fused_test) + 
-                    0.35 * clf_xgb_v.predict_proba(X_fused_test) + 
-                    0.15 * clf_cat_v.predict_proba(X_fused_test) + 
-                    0.15 * clf_et_v.predict_proba(X_fused_test))
-        test_voice_probs += p_test_v / (5.0 * float(len(seeds)))
+ skf_v = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+ for fold, (tr_v, val_v) in enumerate(skf_v.split(X_voice_sub, y_voice_sub)):
+ orig_val_idx = np.where(voice_mask_all)[0][val_v]
+ 
+ clf_lgb_v = LGBMClassifier(n_estimators=300, num_leaves=25, learning_rate=0.07, min_child_samples=10,
+ colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
+ clf_xgb_v = XGBClassifier(n_estimators=300, max_depth=6, learning_rate=0.05, subsample=0.80,
+ colsample_bytree=0.75, tree_method='hist', random_state=seed+fold, n_jobs=-1)
+ clf_cat_v = CatBoostClassifier(iterations=350, depth=6, learning_rate=0.06, l2_leaf_reg=3,
+ random_seed=seed+fold, verbose=0, thread_count=-1)
+ clf_et_v = ExtraTreesClassifier(n_estimators=300, max_depth=18, min_samples_split=3, random_state=seed+fold, n_jobs=-1)
+ 
+ clf_lgb_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
+ clf_xgb_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
+ clf_cat_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
+ clf_et_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
+ 
+ p_val_v = (0.35 * clf_lgb_v.predict_proba(X_voice_sub[val_v]) + 
+ 0.35 * clf_xgb_v.predict_proba(X_voice_sub[val_v]) + 
+ 0.15 * clf_cat_v.predict_proba(X_voice_sub[val_v]) + 
+ 0.15 * clf_et_v.predict_proba(X_voice_sub[val_v]))
+ oof_voice_probs[orig_val_idx] += p_val_v / float(len(seeds))
+ 
+ p_test_v = (0.35 * clf_lgb_v.predict_proba(X_fused_test) + 
+ 0.35 * clf_xgb_v.predict_proba(X_fused_test) + 
+ 0.15 * clf_cat_v.predict_proba(X_fused_test) + 
+ 0.15 * clf_et_v.predict_proba(X_fused_test))
+ test_voice_probs += p_test_v / (5.0 * float(len(seeds)))
 
-    skf_vi = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
-    for fold, (tr_vi, val_vi) in enumerate(skf_vi.split(X_video_sub, y_video_sub)):
-        orig_val_idx_vi = np.where(video_mask_all)[0][val_vi]
-        
-        clf_lgb_vi = LGBMClassifier(n_estimators=300, num_leaves=25, learning_rate=0.07, min_child_samples=10,
-                                    colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
-        clf_xgb_vi = XGBClassifier(n_estimators=300, max_depth=6, learning_rate=0.05, subsample=0.80,
-                                   colsample_bytree=0.75, tree_method='hist', random_state=seed+fold, n_jobs=-1)
-        clf_cat_vi = CatBoostClassifier(iterations=350, depth=6, learning_rate=0.06, l2_leaf_reg=3,
-                                        random_seed=seed+fold, verbose=0, thread_count=-1)
-        clf_et_vi  = ExtraTreesClassifier(n_estimators=300, max_depth=18, min_samples_split=3, random_state=seed+fold, n_jobs=-1)
-        
-        clf_lgb_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
-        clf_xgb_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
-        clf_cat_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
-        clf_et_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
-        
-        p_val_vi = (0.35 * clf_lgb_vi.predict_proba(X_video_sub[val_vi]) + 
-                    0.35 * clf_xgb_vi.predict_proba(X_video_sub[val_vi]) + 
-                    0.15 * clf_cat_vi.predict_proba(X_video_sub[val_vi]) + 
-                    0.15 * clf_et_vi.predict_proba(X_video_sub[val_vi]))
-        oof_video_probs[orig_val_idx_vi] += p_val_vi / float(len(seeds))
-        
-        p_test_vi = (0.35 * clf_lgb_vi.predict_proba(X_fused_test) + 
-                     0.35 * clf_xgb_vi.predict_proba(X_fused_test) + 
-                     0.15 * clf_cat_vi.predict_proba(X_fused_test) + 
-                     0.15 * clf_et_vi.predict_proba(X_fused_test))
-        test_video_probs += p_test_vi / (5.0 * float(len(seeds)))
+ skf_vi = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+ for fold, (tr_vi, val_vi) in enumerate(skf_vi.split(X_video_sub, y_video_sub)):
+ orig_val_idx_vi = np.where(video_mask_all)[0][val_vi]
+ 
+ clf_lgb_vi = LGBMClassifier(n_estimators=300, num_leaves=25, learning_rate=0.07, min_child_samples=10,
+ colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
+ clf_xgb_vi = XGBClassifier(n_estimators=300, max_depth=6, learning_rate=0.05, subsample=0.80,
+ colsample_bytree=0.75, tree_method='hist', random_state=seed+fold, n_jobs=-1)
+ clf_cat_vi = CatBoostClassifier(iterations=350, depth=6, learning_rate=0.06, l2_leaf_reg=3,
+ random_seed=seed+fold, verbose=0, thread_count=-1)
+ clf_et_vi = ExtraTreesClassifier(n_estimators=300, max_depth=18, min_samples_split=3, random_state=seed+fold, n_jobs=-1)
+ 
+ clf_lgb_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
+ clf_xgb_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
+ clf_cat_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
+ clf_et_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
+ 
+ p_val_vi = (0.35 * clf_lgb_vi.predict_proba(X_video_sub[val_vi]) + 
+ 0.35 * clf_xgb_vi.predict_proba(X_video_sub[val_vi]) + 
+ 0.15 * clf_cat_vi.predict_proba(X_video_sub[val_vi]) + 
+ 0.15 * clf_et_vi.predict_proba(X_video_sub[val_vi]))
+ oof_video_probs[orig_val_idx_vi] += p_val_vi / float(len(seeds))
+ 
+ p_test_vi = (0.35 * clf_lgb_vi.predict_proba(X_fused_test) + 
+ 0.35 * clf_xgb_vi.predict_proba(X_fused_test) + 
+ 0.15 * clf_cat_vi.predict_proba(X_fused_test) + 
+ 0.15 * clf_et_vi.predict_proba(X_fused_test))
+ test_video_probs += p_test_vi / (5.0 * float(len(seeds)))
 
 oof_fused_10c = np.zeros((N, n_classes))
 test_fused_10c = np.zeros((len(test_raw), n_classes))
 
 for i, c_name in enumerate(class_names):
-    if "voice" in c_name:
-        v_idx = np.where(voice_classes == c_name)[0][0]
-        oof_fused_10c[:, i] = (1.0 - oof_modality) * oof_voice_probs[:, v_idx]
-        test_fused_10c[:, i] = (1.0 - test_modality) * test_voice_probs[:, v_idx]
-    else:
-        vi_idx = np.where(video_classes == c_name)[0][0]
-        oof_fused_10c[:, i] = oof_modality * oof_video_probs[:, vi_idx]
-        test_fused_10c[:, i] = test_modality * test_video_probs[:, vi_idx]
+ if "voice" in c_name:
+ v_idx = np.where(voice_classes == c_name)[0][0]
+ oof_fused_10c[:, i] = (1.0 - oof_modality) * oof_voice_probs[:, v_idx]
+ test_fused_10c[:, i] = (1.0 - test_modality) * test_voice_probs[:, v_idx]
+ else:
+ vi_idx = np.where(video_classes == c_name)[0][0]
+ oof_fused_10c[:, i] = oof_modality * oof_video_probs[:, vi_idx]
+ test_fused_10c[:, i] = test_modality * test_video_probs[:, vi_idx]
 
 c_zvid = np.where(class_names == 'Zoom_video')[0][0]
 c_mvid = np.where(class_names == 'GoogleMeet_video')[0][0]
@@ -199,29 +199,29 @@ clf_r_dvoi = LGBMClassifier(n_estimators=300, num_leaves=18, max_depth=5, learni
 clf_r_dvoi.fit(X_fused_train[mask_dvoi], (y_enc[mask_dvoi] == c_zvoi).astype(int))
 
 def apply_resolvers(probs, feats):
-    probs_adj = probs.copy()
-    for i in range(len(probs)):
-        top2 = np.argsort(probs[i])[-2:]
-        margin = probs[i, top2[1]] - probs[i, top2[0]]
-        if margin < 0.14:
-            if set(top2) == {c_zvid, c_mvid}:
-                p_res = clf_r_vid.predict_proba(feats[[i]])[0, 1]
-                p_sum = probs[i, c_zvid] + probs[i, c_mvid]
-                probs_adj[i, c_zvid] = p_sum * p_res
-                probs_adj[i, c_mvid] = p_sum * (1.0 - p_res)
-            elif set(top2) == {c_zvoi, c_dvoi}:
-                p_res = clf_r_dvoi.predict_proba(feats[[i]])[0, 1]
-                p_sum = probs[i, c_zvoi] + probs[i, c_dvoi]
-                probs_adj[i, c_zvoi] = p_sum * p_res
-                probs_adj[i, c_dvoi] = p_sum * (1.0 - p_res)
-    return probs_adj
+ probs_adj = probs.copy()
+ for i in range(len(probs)):
+ top2 = np.argsort(probs[i])[-2:]
+ margin = probs[i, top2[1]] - probs[i, top2[0]]
+ if margin < 0.14:
+ if set(top2) == {c_zvid, c_mvid}:
+ p_res = clf_r_vid.predict_proba(feats[[i]])[0, 1]
+ p_sum = probs[i, c_zvid] + probs[i, c_mvid]
+ probs_adj[i, c_zvid] = p_sum * p_res
+ probs_adj[i, c_mvid] = p_sum * (1.0 - p_res)
+ elif set(top2) == {c_zvoi, c_dvoi}:
+ p_res = clf_r_dvoi.predict_proba(feats[[i]])[0, 1]
+ p_sum = probs[i, c_zvoi] + probs[i, c_dvoi]
+ probs_adj[i, c_zvoi] = p_sum * p_res
+ probs_adj[i, c_dvoi] = p_sum * (1.0 - p_res)
+ return probs_adj
 
 oof_resolved = apply_resolvers(oof_fused_10c, X_fused_train)
 
 def loss_func(multipliers):
-    calib_p = oof_resolved * multipliers
-    preds = np.argmax(calib_p, axis=1)
-    return -f1_score(y_enc, preds, average='macro')
+ calib_p = oof_resolved * multipliers
+ preds = np.argmax(calib_p, axis=1)
+ return -f1_score(y_enc, preds, average='macro')
 
 res = minimize(loss_func, np.ones(n_classes), method='Nelder-Mead', options={'maxiter': 800, 'xatol': 1e-4})
 best_multipliers = res.x
@@ -241,23 +241,23 @@ tta_test_probs = np.zeros((len(test_raw), n_classes))
 np.random.seed(42)
 
 for tta_pass in range(5):
-    if tta_pass == 0:
-        test_j_df = test_raw.copy()
-    else:
-        test_j_df = test_raw.copy()
-        for i in range(1, 5):
-            jitter = np.random.normal(0, 2.5e-5, size=len(test_raw))
-            test_j_df[f"relative_time_{i}"] = np.maximum(0, test_j_df[f"relative_time_{i}"] + jitter)
+ if tta_pass == 0:
+ test_j_df = test_raw.copy()
+ else:
+ test_j_df = test_raw.copy()
+ for i in range(1, 5):
+ jitter = np.random.normal(0, 2.5e-5, size=len(test_raw))
+ test_j_df[f"relative_time_{i}"] = np.maximum(0, test_j_df[f"relative_time_{i}"] + jitter)
 
-    test_j_fe = extract_transport_features(test_j_df)
-    test_j_seq = build_sequence_tensor(test_j_df)
-    with torch.no_grad():
-        test_j_emb, _ = gru_model(torch.tensor(test_j_seq).to(device))
-        test_j_emb = test_j_emb.cpu().numpy()
-        
-    X_test_j_fused = np.hstack([test_j_fe[selected_feats].values, test_j_emb])
-    p_meta_j_res = apply_resolvers(test_fused_10c, X_test_j_fused)
-    tta_test_probs += (p_meta_j_res * best_multipliers) / 5.0
+ test_j_fe = extract_transport_features(test_j_df)
+ test_j_seq = build_sequence_tensor(test_j_df)
+ with torch.no_grad():
+ test_j_emb, _ = gru_model(torch.tensor(test_j_seq).to(device))
+ test_j_emb = test_j_emb.cpu().numpy()
+ 
+ X_test_j_fused = np.hstack([test_j_fe[selected_feats].values, test_j_emb])
+ p_meta_j_res = apply_resolvers(test_fused_10c, X_test_j_fused)
+ tta_test_probs += (p_meta_j_res * best_multipliers) / 5.0
 
 test_preds = np.argmax(tta_test_probs, axis=1)
 test_labels = le_all.inverse_transform(test_preds)
@@ -265,15 +265,15 @@ test_prob_norm = tta_test_probs / np.sum(tta_test_probs, axis=1, keepdims=True)
 
 df_sub = pd.DataFrame({'Predicted_Label': test_labels})
 for i, c in enumerate(class_names):
-    df_sub[f'Prob_{c}'] = test_prob_norm[:, i]
+ df_sub[f'Prob_{c}'] = test_prob_norm[:, i]
 
 df_sub.to_csv("results/predictions.csv", index=False)
 
 cm = confusion_matrix(y_enc, final_preds)
 fig, ax = plt.subplots(figsize=(12, 10))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-            xticklabels=class_names, yticklabels=class_names,
-            linewidths=0.5, linecolor='white', ax=ax)
+ xticklabels=class_names, yticklabels=class_names,
+ linewidths=0.5, linecolor='white', ax=ax)
 ax.set_title(f'Hierarchical Multi-View Stacking Confusion Matrix (Macro-F1 = {final_f1:.4f}, N = {N})', fontsize=11)
 ax.set_xlabel('Predicted Class', fontsize=11)
 ax.set_ylabel('True Class', fontsize=11)
