@@ -1,42 +1,35 @@
 # Technical Evaluation Report: Encrypted Network Traffic Classification
 
 ## 1. Overview and Methodology
-This report documents the performance of machine learning architectures evaluated on the encrypted UDP traffic classification benchmark (10 application/modality classes, N = 3,325 total flows). All models were evaluated under strict 15-fold cross-validation across three random seeds (42, 100, 2026).
+This report documents the performance of the Stacking Model with Resolvers evaluated on the expanded master dataset (10 application/modality classes, N = 5,175 total flows). The architecture was evaluated under strict 15-fold cross-validation across three random seeds (42, 100, 2026).
 
-## 2. Model Performance Leaderboard
+## 2. Master Model Performance
 
-| Architecture | Macro-F1 | Balanced Accuracy | Overall Accuracy | Support |
-| :--- | :---: | :---: | :---: | :---: |
-| Feature-Augmented Stacking with Resolvers & TTA | 0.8644 | 0.8641 | 86.53% | 3,325 |
-| Flat Feature-Augmented Stacking (ElasticNet) | 0.8618 | 0.8619 | 86.35% | 3,325 |
-| Hierarchical Cascaded Stacking | 0.8609 | 0.8610 | 86.26% | 3,325 |
-| Cascaded 3-Model Pipeline | 0.8595 | 0.8593 | 86.14% | 3,325 |
-| Two-Stage Modality Routing Ensemble | 0.8572 | 0.8570 | 85.92% | 3,325 |
-| Calibrated Blend | 0.8530 | 0.8538 | 85.59% | 3,325 |
-| Standalone Tuned LightGBM | 0.8508 | 0.8513 | 85.38% | 3,325 |
-| Standalone Tuned XGBoost | 0.8396 | 0.8401 | 84.18% | 3,325 |
-| Standalone Tuned TabPFN v3 | 0.8355 | 0.8359 | 83.52% | 3,325 |
-| Pre-Augmentation Baseline | 0.8147 | 0.8403 | 81.71% | 1,285 |
+| Metric | Score (15-Fold CV) | Exact Correct Flows | Support |
+| :--- | :---: | :---: | :---: |
+| **Macro-F1 Score** | **0.8867** | - | 5,175 |
+| **Balanced Accuracy** | **0.8869** | - | 5,175 |
+| **Overall Accuracy** | **88.70%** | **4,590 / 5,175** | 5,175 |
 
-## 3. 10-Class Classification Report (Best Model: Stacking with Resolvers)
+## 3. 10-Class Classification Report (N = 5,175 Flows)
 
 | Class Name | Precision | Recall | F1-Score | Support |
 | :--- | :---: | :---: | :---: | :---: |
-| WhatsApp_voice | 0.9833 | 0.9833 | 0.9833 | 300 |
-| WhatsApp_video | 0.9387 | 0.9636 | 0.9510 | 302 |
-| GoogleMeet_voice | 0.9010 | 0.9100 | 0.9055 | 300 |
-| Discord_video | 0.9043 | 0.8706 | 0.8872 | 456 |
-| Messenger_video | 0.8800 | 0.8640 | 0.8720 | 331 |
-| Messenger_voice | 0.8754 | 0.8605 | 0.8679 | 294 |
-| Discord_voice | 0.8344 | 0.8858 | 0.8594 | 438 |
-| Zoom_voice | 0.8153 | 0.7800 | 0.7973 | 300 |
-| GoogleMeet_video | 0.8191 | 0.7947 | 0.8067 | 302 |
-| Zoom_video | 0.7006 | 0.7285 | 0.7143 | 302 |
-| **Overall / Macro Average** | **0.8652** | **0.8641** | **0.8644** | **3,325** |
+| WhatsApp_voice | 0.9904 | 0.9904 | 0.9904 | 520 |
+| WhatsApp_video | 0.9465 | 0.9668 | 0.9565 | 512 |
+| Messenger_voice | 0.9553 | 0.9572 | 0.9563 | 514 |
+| Messenger_video | 0.9237 | 0.9237 | 0.9237 | 511 |
+| GoogleMeet_voice | 0.9159 | 0.9212 | 0.9185 | 520 |
+| Discord_video | 0.9250 | 0.8750 | 0.8993 | 536 |
+| Discord_voice | 0.8462 | 0.9131 | 0.8784 | 518 |
+| Zoom_voice | 0.8758 | 0.8135 | 0.8435 | 520 |
+| GoogleMeet_video | 0.7875 | 0.7891 | 0.7883 | 512 |
+| Zoom_video | 0.7063 | 0.7188 | 0.7125 | 512 |
+| **Overall / Macro Average** | **0.8873** | **0.8869** | **0.8867** | **5,175** |
 
 ## 4. Key Architectural Mechanisms
-1. **Feature Engineering**: 56 domain invariants including 2-level Discrete Haar Wavelet (DWT) energy ratios, codec clump-to-silence ratios, log inter-arrival time moments, and payload variance ratios.
-2. **Level-1 Base Estimators**: 15-fold out-of-fold probability vectors generated across LightGBM, XGBoost, CatBoost, and TabPFN v3.
-3. **Level-2 Meta-Learner**: ElasticNet-regularized Logistic Regression (C=0.20, L1-ratio=0.20) operating on 96 meta-features (40 probabilities + 56 physical features).
+1. **56 Feature Invariants**: 2-level Discrete Haar Wavelet (DWT) energy ratios, codec clump-to-silence ratios, log inter-arrival time moments, and payload variance ratios.
+2. **Level-1 Base Estimators**: 15-fold out-of-fold probability vectors generated across LightGBM, XGBoost, and CatBoost.
+3. **Level-2 Meta-Learner**: ElasticNet-regularized Logistic Regression (C=0.20, L1-ratio=0.20) operating on 86 meta-features (30 probabilities + 56 physical features).
 4. **Pairwise Conflict Resolvers**: Dedicated micro-classifiers triggered on high-uncertainty samples (margin < 0.15) for Zoom vs Google Meet video and voice traffic.
 5. **Test-Time Augmentation (TTA)**: 5-pass micro-jitter averaging at inference time to handle hardware timing variance.
