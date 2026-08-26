@@ -122,15 +122,17 @@ Data was mined from verified public datasets and isolated testbeds covering the 
 │   ├── FEATURE_DICTIONARY.md      # Full feature definitions and mathematical formulas
 │   └── plots/                     # High-resolution feature distribution plots
 ├── src/
-│   ├── data_mining.py             # PCAP parsing & 5-packet window extraction routine
 │   ├── audio_to_csv.py            # Audio WAV framing & flow conversion utility
+│   ├── data_mining.py             # PCAP parsing & 5-packet window extraction routine
 │   ├── features.py                # Transport invariant extraction & sequence tensor builder
 │   ├── model.py                   # Bi-GRU sequence embedding neural backbone
 │   ├── train_and_evaluate.py      # 15-fold cross-validation training and evaluation
 │   ├── verify_overfitting.py      # 6-point forensic overfitting & generalization audit
 │   └── predict.py                 # Standalone inference generator
 ├── results/
-│   ├── predictions.csv            # Predictions and probability distributions for Testing_set.csv
+│   ├── submission.csv             # Standard competition submission file (N = 327)
+│   ├── predictions.csv            # Predicted labels and probability distributions (N = 327)
+│   ├── Testing_set_with_predictions.csv # Test features merged with predicted labels (N = 327)
 │   ├── confusion_matrix.png       # 10-class confusion matrix heatmap
 │   ├── overfitting_audit_charts.png # 15-fold stability and test entropy distributions
 │   ├── OVERFITTING_AUDIT.md       # 6-point forensic audit report
