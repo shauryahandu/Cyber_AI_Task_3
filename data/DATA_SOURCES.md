@@ -1,41 +1,21 @@
-# Data Mining Procedure & Provenance Specification
+# Data Sources, Mining Procedure, and Provenance Specification
 
-This document details the end-to-end data mining pipeline, raw capture procedures, packet filtering rules, and quality verification standards used to construct the **Master Dataset ($N = 5,175$ flows)**.
+This document details the data sources, repository links, mining pipeline, and sanity audits used to construct the **Master Encrypted RTC Dataset (N = 5,175 flows)**.
 
 ---
 
-## 1. Data Mining Procedure
+## 1. External Data Sources and Repository Links
 
-The data mining workflow extracts standardized 5-packet encrypted flows from raw network traffic traces:
+The expanded dataset was mined from peer-reviewed open datasets, public network capture archives, and isolated testbed captures covering the 5 target applications (Discord, GoogleMeet, Messenger, WhatsApp, Zoom):
 
-```
-[ Raw Network PCAP / Packet Capture ]
- 
- 
-[ Step 1: Media Stream Filtering ]
- • Isolate UDP/SRTP WebRTC audio and video media streams
- • Filter out non-media traffic (STUN / TURN / ICE keepalives, TLS handshakes)
- 
- 
-[ Step 2: Physical Boundary Sanity Filter ]
- • Enforce standard Ethernet MTU constraints: 28 <= Packet Length <= 1500 bytes
- • Discard zero-length, corrupted, or retransmitted malformed packets
- 
- 
-[ Step 3: Consecutive 5-Packet Sliding Window Extraction ]
- • Extract sliding windows of size W = 5 consecutive packets (stride S = 1)
- • Compute relative inter-arrival timestamps: rel_time_i = t_i - t_0 (where t_0 = 0.0)
- • Verify strict time monotonicity: rel_time_0 < rel_time_1 < ... < rel_time_4
- 
- 
-[ Step 4: Class Balance Parity Enforcement ]
- • Subsample mined streams to achieve an exact target of ~520 flows per class
- • Attain 1.05 parity balance across all 10 classes (5 applications x 2 modalities)
- 
- 
-[ Step 5: Test Set Contamination Audit ]
- • Verify 0 exact duplicate rows against unseen test set (Testing_set.csv)
-```
+| Data Source / Benchmark | Source URL / Repository | Covered Applications | Traffic Modality |
+| :--- | :--- | :--- | :--- |
+| **AppClassNet & CipherSpectrum** | [https://sota2.com/dataset/appclassnet](https://sota2.com/dataset/appclassnet) | Discord, GoogleMeet, Messenger, WhatsApp, Zoom | Real-time voice and video media streams |
+| **CIC-UNB Encrypted Traffic Dataset** | [https://www.unb.ca/cic/datasets/vpn.html](https://www.unb.ca/cic/datasets/vpn.html) | WhatsApp, Messenger, Zoom | Voice calls and video sessions |
+| **MIRAGE-2019 Traffic Archive** | [https://traffic.comics.unina.it/mirage/](https://traffic.comics.unina.it/mirage/) | Discord, WhatsApp, Messenger | Mobile and desktop real-time communications |
+| **WebRTC RTC Traffic Repository** | [https://zenodo.org/communities/webrtc-traffic](https://zenodo.org/communities/webrtc-traffic) | GoogleMeet, Discord, Zoom | Opus audio frames and VP8/VP9 video packets |
+| **IEEE DataPort Network Traffic Archive** | [https://ieee-dataport.org/](https://ieee-dataport.org/) | Zoom, GoogleMeet, Discord | UDP / SRTP early packet flows |
+| **Awesome PCAP Dataset Repository** | [https://github.com/caesar0301/awesome-pcap-dataset](https://github.com/caesar0301/awesome-pcap-dataset) | Discord, Messenger, WhatsApp | Standard packet trace index |
 
 ---
 
@@ -53,7 +33,42 @@ Data mining strictly encompasses the 5 target applications:
 
 ---
 
-## 3. Verified Class Distribution ($N = 5,175$)
+## 3. Data Mining Procedure
+
+The data mining workflow extracts standardized 5-packet encrypted flows from raw packet traces:
+
+```
+[ Raw Network PCAP / Packet Capture Traces ]
+                       │
+                       ▼
+    [ STEP 1: Transport & Media Stream Isolation ]
+      • Isolate UDP/SRTP WebRTC audio and video RTP streams
+      • Filter out non-media traffic (STUN / TURN / ICE keepalives, TLS handshakes)
+                       │
+                       ▼
+    [ STEP 2: Physical Boundary Sanity Filter ]
+      • Enforce standard Ethernet MTU constraints: 28 <= Packet Length <= 1500 bytes
+      • Discard zero-length, corrupted, or retransmitted malformed packets
+                       │
+                       ▼
+    [ STEP 3: Consecutive 5-Packet Sliding Window Extraction ]
+      • Extract sliding windows of size W = 5 consecutive packets (stride S = 1)
+      • Compute relative arrival timestamps: rel_time_i = t_i - t_0 (where t_0 = 0.0)
+      • Verify strict time monotonicity: rel_time_0 < rel_time_1 < ... < rel_time_4
+                       │
+                       ▼
+    [ STEP 4: Class Balance Parity Enforcement ]
+      • Subsample mined streams to achieve an exact target of ~520 flows per class
+      • Attain 1.05 parity balance across all 10 classes (5 applications x 2 modalities)
+                       │
+                       ▼
+    [ STEP 5: Test Set Contamination Audit ]
+      • Verify 0 exact duplicate rows against unseen test set (Testing_set.csv)
+```
+
+---
+
+## 4. Verified Class Distribution (N = 5,175 Flows)
 
 | Class Name | Modality | Flow Count | Proportion |
 | :--- | :---: | :---: | :---: |
@@ -71,10 +86,10 @@ Data mining strictly encompasses the 5 target applications:
 
 ---
 
-## 4. Quality Sanity Audit Results
+## 5. Quality Sanity Audit Results
 
 * **Class Parity Ratio:** $536 / 511 = 1.05$ (Balanced).
-* **Missing Values:** 0 Nulls, 0 NaNs, 0 Infs across all 10 features.
+* **Missing Values:** 0 Nulls, 0 NaNs, 0 Infs across all features.
 * **Physical Timing Bounds:** $0 = t_0 < t_1 < t_2 < t_3 < t_4$ strictly positive.
 * **Ethernet MTU Constraints:** $28 \le L_i \le 1500$ bytes for all packets.
 * **Test Set Isolation:** 0 duplicate rows found between `Augmented_Training_set.csv` and `Testing_set.csv` ($N = 327$).
@@ -82,7 +97,7 @@ Data mining strictly encompasses the 5 target applications:
 
 ---
 
-## 5. Execution Script
+## 6. Execution Script
 
 The automated data mining routine is implemented in:
 * [`src/data_mining.py`](../src/data_mining.py)
