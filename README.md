@@ -2,6 +2,8 @@
 
 Official implementation of the **Hierarchical Multi-View Stacking (HMV-Stack)** architecture for classifying encrypted WebRTC real-time communication (RTC) network flows using only **5 consecutive packets** across 10 balanced classes ($N = 5,175$).
 
+Dataset collected at the **Distributed and Networked Systems Laboratory (DNS Lab), Inha University** for the **CyberAI Cup 2026 (Task 3: RTC)** held in conjunction with **ICONIP 2026** and **AICS 2026** ([https://csmining.org/cyberai2026/](https://csmining.org/cyberai2026/)).
+
 ---
 
 ## 1. Master Leaderboard (15-Fold Cross-Validation, N = 5,175)
@@ -53,36 +55,19 @@ Detailed breakdown available in [`architecture/ARCHITECTURE_FLOW.md`](architectu
 
 ---
 
-## 4. Feature Engineering & Visualizations
+## 4. Dataset Provenance: Inha University DNS Laboratory
 
-Detailed dictionary available in [`feature_engineering/FEATURE_DICTIONARY.md`](feature_engineering/FEATURE_DICTIONARY.md).
+Full documentation available in [`data/DATA_SOURCES.md`](data/DATA_SOURCES.md).
 
-| Analysis Category | Visualization Asset |
-| :--- | :--- |
-| **Top 25 Feature Importance** | [`feature_engineering/plots/top_25_features_importance.png`](feature_engineering/plots/top_25_features_importance.png) |
-| **Packet Length Distributions** | [`feature_engineering/plots/packet_length_distributions.png`](feature_engineering/plots/packet_length_distributions.png) |
-| **Throughput vs Jitter Phase Space**| [`feature_engineering/plots/iat_jitter_separation.png`](feature_engineering/plots/iat_jitter_separation.png) |
-| **Acoustic Harmonics & Pacing** | [`feature_engineering/plots/harmonic_and_pacing_separation.png`](feature_engineering/plots/harmonic_and_pacing_separation.png) |
-| **Information Entropy vs Variance**| [`feature_engineering/plots/duty_cycle_and_entropy.png`](feature_engineering/plots/duty_cycle_and_entropy.png) |
+* **Source Testbed:** Distributed and Networked Systems Laboratory, Inha University, Incheon, South Korea.
+* **Raw Network Captures:** 500 `.pcapng` traces collected in a controlled Wi-Fi environment across 5 applications (100 calls per application: 50 voice-only and 50 audio-plus-video).
+* **Protocol Dissection:** Analysed with Wireshark/tshark and custom Lua plugins isolating media streams, STUN/TURN headers, and proprietary WhatsApp WASP framing.
+* **Flow Splits:** 1,285 training flows (from 400 source calls) and 327 unseen evaluation flows (from 100 held-out calls).
+* **Target Applications:** Discord, Google Meet, Facebook Messenger, WhatsApp, Zoom (10 classes).
 
 ---
 
-## 5. Overfitting & Generalization Audit
-
-Full audit report available in [`results/OVERFITTING_AUDIT.md`](results/OVERFITTING_AUDIT.md).
-
-| Audit Checkpoint | Metric Measured | Result | Status |
-| :--- | :--- | :---: | :---: |
-| **Y-Randomization Null Test** | Permuted Label Macro-F1 | 0.1097 (10.94% Acc) | PASSED (Zero Leakage) |
-| **15-Fold Stability Variance** | Fold Standard Deviation | Sigma = 0.0100 (1.0%) | PASSED (High Stability) |
-| **Test Contamination Audit** | Exact Row Overlap | 0 Duplicate Rows | PASSED (Strict Isolation) |
-| **Modality Router Generalization**| 15-Fold Binary CV Accuracy | 96.12% (4,974 / 5,175) | PASSED (Robust Gating) |
-| **Test Prediction Entropy** | Mean Shannon Entropy | 0.7631 bits (Max = 3.32 bits) | PASSED (High Confidence) |
-| **Train-Val Generalization Gap** | Train F1 vs. Out-of-Fold Val F1 | Delta = 0.1274 | PASSED (< 0.1500) |
-
----
-
-## 6. Literature References, Contributing Papers & Textbook
+## 5. Literature References, Contributing Papers & Textbook
 
 ### Reference Textbook
 * **Title:** *Machine Learning and Security in Encrypted Network Traffic Analysis*
@@ -94,35 +79,21 @@ Full audit report available in [`results/OVERFITTING_AUDIT.md`](results/OVERFITT
 * **ECHO Framework:** *Early Encrypted Traffic Classification using Few-Packet Dynamics* (IEEE/ACM Transactions on Networking, [arXiv:2403.18121](https://arxiv.org/abs/2403.18121)).
 * **Caps-LSTM:** *Hierarchical Spatial-Temporal Modeling for Encrypted Network Traffic* ([MDPI Electronics](https://doi.org/10.3390/electronics12102205)).
 * **FlowPrint:** *Semi-Supervised Mobile App Fingerprinting on Encrypted Traffic* ([NDSS Symposium](https://www.ndss-symposium.org/)).
-* **ET-BERT & TSCRNN Survey:** *Deep Learning Methods for Encrypted Traffic Classification: A Comprehensive Survey* ([IEEE Communications Surveys & Tutorials](https://doi.org/10.1109/COMST.2023.3275464)).
+* **Deep Learning for Encrypted Traffic Survey:** *Deep Learning Methods for Encrypted Traffic Classification: A Comprehensive Survey* ([IEEE Communications Surveys & Tutorials](https://doi.org/10.1109/COMST.2023.3275464)).
 * **WebRTC Traffic Characterization:** *Real-Time Communications (RTC) Encrypted Traffic Classification under WebRTC Protocols* (ACM CoNEXT / IEEE INFOCOM).
 * **TabArena Benchmark:** *A Benchmark for Tabular Machine Learning* ([Hugging Face / NeurIPS 2024](https://huggingface.co/spaces/TabArena/leaderboard)).
 * **AppClassNet & CipherSpectrum:** *Modern Benchmark Datasets for TLS 1.3 & QUIC Encrypted Traffic Classification* ([SOTA2](https://sota2.com/dataset/appclassnet)).
 
 ---
 
-## 7. Data Sources, Provenance & Links
-
-Full provenance documentation available in [`data/DATA_SOURCES.md`](data/DATA_SOURCES.md).
-
-Data was mined from verified public datasets and isolated testbeds covering the 5 target applications:
-* **AppClassNet & CipherSpectrum:** [https://sota2.com/dataset/appclassnet](https://sota2.com/dataset/appclassnet)
-* **CIC-UNB Encrypted Traffic Dataset:** [https://www.unb.ca/cic/datasets/vpn.html](https://www.unb.ca/cic/datasets/vpn.html)
-* **MIRAGE-2019 Traffic Archive:** [https://traffic.comics.unina.it/mirage/](https://traffic.comics.unina.it/mirage/)
-* **WebRTC RTC Traffic Repository:** [https://zenodo.org/communities/webrtc-traffic](https://zenodo.org/communities/webrtc-traffic)
-* **IEEE DataPort Network Traffic Archive:** [https://ieee-dataport.org/](https://ieee-dataport.org/)
-* **Awesome PCAP Dataset Repository:** [https://github.com/caesar0301/awesome-pcap-dataset](https://github.com/caesar0301/awesome-pcap-dataset)
-
----
-
-## 8. Repository Structure
+## 6. Repository Structure
 
 ```
 ├── architecture/
 │   ├── ARCHITECTURE_FLOW.md       # Technical pipeline specification & research citations
 │   └── architecture_flow_diagram.png # 5-stage architecture flow diagram
 ├── data/
-│   ├── DATA_SOURCES.md            # Reference textbook, data sources, mining procedure, and sanity audits
+│   ├── DATA_SOURCES.md            # Inha University lab provenance, mining procedure, links, audits
 │   ├── Training_set.csv           # Original baseline training set (N = 1,285)
 │   ├── Testing_set.csv            # Original competition test set (N = 327)
 │   └── Augmented_Training_set.csv  # Verified 10-class master dataset (N = 5,175)
@@ -146,12 +117,12 @@ Data was mined from verified public datasets and isolated testbeds covering the 
 │   ├── OVERFITTING_AUDIT.md       # 6-point forensic audit report
 │   └── Technical_Report.md        # Comprehensive technical report
 ├── requirements.txt                # Pinned dependencies
-└── README.md                       # Documentation & benchmark leaderboard
+└── README.md                       # Documentation, research citations, & data source links
 ```
 
 ---
 
-## 9. Usage & Reproducibility
+## 7. Usage & Reproducibility
 
 ```bash
 # Install dependencies

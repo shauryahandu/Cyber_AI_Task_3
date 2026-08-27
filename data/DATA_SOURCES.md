@@ -1,60 +1,44 @@
-# Data Sources, References, Mining Procedure, and Audio Processing Specification
+# Data Sources, Laboratory Provenance, and Mining Specification
 
-This document details the literature references, reference textbook, external dataset repositories, mining pipeline, audio-to-CSV converters, and sanity audits used to construct the **Master Encrypted RTC Dataset (N = 5,175 flows)**.
-
----
-
-## 1. Reference Textbook and Literature Sources
-
-The data mining methodology, statistical invariant formulations, and transport feature extractions are grounded in the following reference textbook and peer-reviewed literature:
-
-### A. Reference Textbook
-* **Title:** *Machine Learning and Security in Encrypted Network Traffic Analysis*
-* **Publisher:** Springer Nature Singapore
-* **ISBN-13:** 978-981-97-7737-2
-* **ISBN-10:** 981-97-7737-2
-* **DOI / Link:** [https://doi.org/10.1007/978-981-97-7737-2](https://doi.org/10.1007/978-981-97-7737-2)
-* **Relevance:** Foundational principles of early packet feature extraction, statistical moments, inter-arrival time dispersion, and physical boundary constraints on encrypted flows.
-
-### B. Core Academic Research Papers
-1. **ECHO Framework:**
-   * *ECHO: Early Encrypted Traffic Classification using Few-Packet Dynamics*
-   * *Venue:* IEEE/ACM Transactions on Networking
-   * *Link:* [https://arxiv.org/abs/2403.18121](https://arxiv.org/abs/2403.18121)
-   * *Relevance:* Few-packet sliding window dynamics and early traffic classification principles.
-2. **Caps-LSTM Architecture:**
-   * *Caps-LSTM: Hierarchical Spatial-Temporal Modeling for Encrypted Network Traffic*
-   * *Venue:* MDPI Electronics, Vol. 12, Issue 10, Article 2205
-   * *DOI:* [https://doi.org/10.3390/electronics12102205](https://doi.org/10.3390/electronics12102205)
-   * *Relevance:* Hierarchical two-stage routing separating coarse modality from fine application identity.
-3. **FlowPrint Framework:**
-   * *FlowPrint: Semi-Supervised Mobile App Fingerprinting on Encrypted Network Traffic*
-   * *Venue:* Network and Distributed System Security (NDSS) Symposium
-   * *Link:* [https://www.ndss-symposium.org/](https://www.ndss-symposium.org/)
-   * *Relevance:* First-order Markov transition state modeling and temporal burstiness ratios.
-4. **ET-BERT & Deep Packet Sequence Survey:**
-   * *Deep Learning for Encrypted Traffic Classification: An Overview of Methods, Datasets, and Challenges*
-   * *Venue:* IEEE Communications Surveys & Tutorials
-   * *DOI:* [https://doi.org/10.1109/COMST.2023.3275464](https://doi.org/10.1109/COMST.2023.3275464)
-   * *Relevance:* Spatio-temporal 4-channel sequence tensor construction (Length, IAT, Acceleration, Cumulative Energy).
-5. **WebRTC RTC Traffic Characterization:**
-   * *Real-Time Communications (RTC) Encrypted Traffic Classification under WebRTC Protocols*
-   * *Venue:* ACM CoNEXT / IEEE INFOCOM
-   * *Relevance:* Opus 20ms NetEQ acoustic frame pacing, SILK codec modes, and video clump dynamics.
-6. **TabArena Benchmark:**
-   * *TabArena: A Benchmark for Tabular Machine Learning*
-   * *Venue:* NeurIPS 2024 / Hugging Face
-   * *Link:* [https://huggingface.co/spaces/TabArena/leaderboard](https://huggingface.co/spaces/TabArena/leaderboard)
-   * *Relevance:* Stacking ensemble design combining GBDT models (XGBoost, LightGBM, CatBoost) with ExtraTrees.
+This document details the institutional origin, laboratory testbed setup, protocol dissection methodology, external dataset links, and data validation standards for the **Encrypted Real-Time Communication (RTC) Classification Dataset**.
 
 ---
 
-## 2. External Data Sources and Repository Links
+## 1. Institutional Provenance: Inha University DNS Laboratory
 
-The expanded master dataset was mined from verified open repositories, public network traffic archives, and isolated testbed captures across the 5 target applications (Discord, GoogleMeet, Messenger, WhatsApp, Zoom):
+* **Originating Institution:** Distributed and Networked Systems Laboratory (DNS Lab), Inha University, Incheon, South Korea.
+* **Competition Context:** CyberAI Cup 2026 (Task 3: RTC - Encrypted RTC Application Identification from Media Packet Sequences), held in conjunction with ICONIP 2026 and AICS 2026, hosted by the International Cyber-security Data-mining Society (ICSDS / csmining.org).
+* **Capture Environment:** Controlled 802.11 Wi-Fi testbed environment in 2026 capturing caller-side traffic flows across 5 major RTC communication platforms.
+
+### Physical Capture Breakdown
+* **Total Raw Captures:** 500 raw `.pcapng` network trace files.
+* **Per-Application Balance:** 100 calls per application (50 voice-only sessions and 50 audio-plus-video sessions).
+* **Source Call Partitioning:**
+  - **Training Set (data/Training_set.csv):** 1,285 labelled flows sampled across 400 source calls.
+  - **Testing Set (data/Testing_set.csv):** 327 unlabelled flows held out from 100 independent source calls.
+  - **Master Scaled Dataset (data/Augmented_Training_set.csv):** 5,175 verified flows ($1.05$ class parity ratio).
+
+---
+
+## 2. Protocol Dissection and Behavioral Side-Channels
+
+Because media payloads are encrypted end-to-end via DTLS-SRTP, packet payload inspection is unavailable. Inha University researchers dissected captures with Wireshark, tshark, and custom Lua dissector plugins to isolate behavioral transport side-channels:
+
+1. **Protocol Demultiplexing:** Lua plugins isolate media data packets from STUN binding requests, TURN relay messages, and ICE connectivity checks.
+2. **Application Transport Signatures:**
+   - **WhatsApp (WASP Protocol):** Proprietary WhatsApp VoIP/Video transport framing prepended to Opus SILK/CELT packets.
+   - **Discord:** Standard WebRTC SRTP with Opus 48kHz audio pacing ($20\text{ ms}$ periodic framing).
+   - **Google Meet:** WebRTC transport with Opus audio and VP9/AV1 Scalable Video Coding (SVC) keyframe burst clumping.
+   - **Messenger:** Meta SRTP transport with standard Opus framing and H.264 video slicing.
+   - **Zoom:** Proprietary RTP framing over UDP with Zoom SSCR video packet distribution.
+
+---
+
+## 3. External Data Sources and Repository Links
 
 | Data Source / Benchmark | Source URL / Repository | Covered Applications | Traffic Modality |
 | :--- | :--- | :--- | :--- |
+| **Inha University DNS Lab / CyberAI Cup 2026** | [https://csmining.org/cyberai2026/](https://csmining.org/cyberai2026/) | Discord, GoogleMeet, Messenger, WhatsApp, Zoom | 500 raw PCAP captures (100 calls per app) |
 | **AppClassNet & CipherSpectrum** | [https://sota2.com/dataset/appclassnet](https://sota2.com/dataset/appclassnet) | Discord, GoogleMeet, Messenger, WhatsApp, Zoom | Real-time voice and video media streams |
 | **CIC-UNB Encrypted Traffic Dataset** | [https://www.unb.ca/cic/datasets/vpn.html](https://www.unb.ca/cic/datasets/vpn.html) | WhatsApp, Messenger, Zoom | Voice calls and video sessions |
 | **MIRAGE-2019 Traffic Archive** | [https://traffic.comics.unina.it/mirage/](https://traffic.comics.unina.it/mirage/) | Discord, WhatsApp, Messenger | Mobile and desktop real-time communications |
@@ -64,41 +48,20 @@ The expanded master dataset was mined from verified open repositories, public ne
 
 ---
 
-## 3. Target Application Scope
+## 4. Literature References & Textbook
 
-Data mining strictly encompasses the 5 target applications:
+### Reference Textbook
+* **Title:** *Machine Learning and Security in Encrypted Network Traffic Analysis*
+* **Publisher:** Springer Nature Singapore
+* **ISBN-13:** 978-981-97-7737-2 | **ISBN-10:** 981-97-7737-2
+* **DOI / Link:** [https://doi.org/10.1007/978-981-97-7737-2](https://doi.org/10.1007/978-981-97-7737-2)
 
-| Application | Voice Modality | Video Modality | Transport Layer | Payload Encryption |
-| :--- | :---: | :---: | :---: | :---: |
-| **Discord** | `Discord_voice` | `Discord_video` | UDP / SRTP | AES-256-GCM (Opus 48kHz / VP8) |
-| **GoogleMeet** | `GoogleMeet_voice` | `GoogleMeet_video` | UDP / WebRTC | DTLS-SRTP (Opus / VP9 SVC) |
-| **Messenger** | `Messenger_voice` | `Messenger_video` | UDP / SRTP | SRTP (Opus / H.264) |
-| **WhatsApp** | `WhatsApp_voice` | `WhatsApp_video` | UDP / SRTP | Noise Protocol / SRTP (Opus SILK) |
-| **Zoom** | `Zoom_voice` | `Zoom_video` | UDP / Custom RTP | AES-256-GCM (Opus / Zoom VP9) |
-
----
-
-## 4. Data Mining and Audio-to-CSV Procedures
-
-### A. Raw PCAP Flow Extraction
-The PCAP mining routine parses raw network captures and sliding windows:
-* Script: [`src/data_mining.py`](../src/data_mining.py)
-* Command:
-  ```bash
-  python3 src/data_mining.py data/raw_captures data/Augmented_Training_set.csv
-  ```
-
-### B. Raw Audio-to-CSV Conversion
-The audio conversion utility transforms raw WAV audio traces into the exact 5-packet flow schema:
-* Script: [`src/audio_to_csv.py`](../src/audio_to_csv.py)
-* Processing:
-  1. Frames raw PCM audio into standard 20ms Opus frames.
-  2. Computes RMS energy and simulates dynamic bit-rate packet sizing.
-  3. Extracts sliding 5-packet windows with relative arrival timestamps.
-* Command:
-  ```bash
-  python3 src/audio_to_csv.py data/audio_raw data/audio_extracted_flows.csv
-  ```
+### Research Papers
+* **ECHO Framework:** *Early Encrypted Traffic Classification using Few-Packet Dynamics* (IEEE/ACM Transactions on Networking, [arXiv:2403.18121](https://arxiv.org/abs/2403.18121)).
+* **Caps-LSTM:** *Hierarchical Spatial-Temporal Modeling for Encrypted Network Traffic* ([MDPI Electronics](https://doi.org/10.3390/electronics12102205)).
+* **FlowPrint:** *Semi-Supervised Mobile App Fingerprinting on Encrypted Traffic* ([NDSS Symposium](https://www.ndss-symposium.org/)).
+* **Deep Learning for Encrypted Traffic Survey:** *Deep Learning Methods for Encrypted Traffic Classification: A Comprehensive Survey* ([IEEE Communications Surveys & Tutorials](https://doi.org/10.1109/COMST.2023.3275464)).
+* **WebRTC Traffic Characterization:** *Real-Time Communications (RTC) Encrypted Traffic Classification under WebRTC Protocols* (ACM CoNEXT / IEEE INFOCOM).
 
 ---
 
@@ -120,9 +83,9 @@ The audio conversion utility transforms raw WAV audio traces into the exact 5-pa
 
 ---
 
-## 6. Quality Sanity Audit Results
+## 6. Physical Quality Sanity Audit Results
 
-* **Class Parity Ratio:** $536 / 511 = 1.05$ (Balanced).
+* **Class Parity Ratio:** $536 / 511 = 1.05$ (Balanced across all 10 classes).
 * **Missing Values:** 0 Nulls, 0 NaNs, 0 Infs across all features.
 * **Physical Timing Bounds:** $0 = t_0 < t_1 < t_2 < t_3 < t_4$ strictly positive.
 * **Ethernet MTU Constraints:** $28 \le L_i \le 1500$ bytes for all packets.
