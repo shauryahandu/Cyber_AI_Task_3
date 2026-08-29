@@ -67,10 +67,10 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.AdamW(gru_model.parameters(), lr=0.002, weight_decay=1e-4)
 
 train_dataset = TensorDataset(torch.tensor(X_seq_train, dtype=torch.float32), torch.tensor(y_enc, dtype=torch.long))
-train_loader = DataLoader(train_dataset, batch_size=1024, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=2048, shuffle=True)
 
 gru_model.train()
-for epoch in range(20):
+for epoch in range(15):
     for batch_x, batch_y in train_loader:
         batch_x, batch_y = batch_x.to(device), batch_y.to(device)
         optimizer.zero_grad()
@@ -79,12 +79,18 @@ for epoch in range(20):
         loss.backward()
         optimizer.step()
 
-gru_model.eval()
-with torch.no_grad():
-    train_emb, _ = gru_model(torch.tensor(X_seq_train, dtype=torch.float32).to(device))
-    test_emb, _ = gru_model(torch.tensor(X_seq_test, dtype=torch.float32).to(device))
-    train_emb = train_emb.cpu().numpy()
-    test_emb = test_emb.cpu().numpy()
+def get_embeddings_batched(model, arr, batch_size=4096):
+    model.eval()
+    res = []
+    with torch.no_grad():
+        for i in range(0, len(arr), batch_size):
+            bx = torch.tensor(arr[i:i+batch_size], dtype=torch.float32).to(device)
+            emb, _ = model(bx)
+            res.append(emb.cpu().numpy())
+    return np.vstack(res)
+
+train_emb = get_embeddings_batched(gru_model, X_seq_train, batch_size=4096)
+test_emb = get_embeddings_batched(gru_model, X_seq_test, batch_size=4096)
 
 X_fused_train = np.hstack([train_fe[selected_feats].values, train_emb])
 X_fused_test = np.hstack([test_fe[selected_feats].values, test_emb])
@@ -112,7 +118,7 @@ test_router_probs = np.zeros(len(test_raw))
 for seed in seeds:
     skf_m = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
     for fold, (tr, val) in enumerate(skf_m.split(X_fused_train, y_modality)):
-        clf_r = LGBMClassifier(n_estimators=300, num_leaves=31, learning_rate=0.05,
+        clf_r = LGBMClassifier(n_estimators=250, num_leaves=31, learning_rate=0.06,
                                subsample=0.85, colsample_bytree=0.80, random_state=seed+fold, verbosity=-1, n_jobs=-1)
         clf_r.fit(X_fused_train[tr], y_modality[tr])
         oof_router_probs[val] += clf_r.predict_proba(X_fused_train[val])[:, 1] / float(len(seeds))
@@ -133,13 +139,13 @@ for seed in seeds:
     for fold, (tr_v, val_v) in enumerate(skf_v.split(X_voice_sub, y_voice_sub)):
         orig_val_idx = np.where(voice_mask_all)[0][val_v]
         
-        clf_lgb_v = LGBMClassifier(n_estimators=300, num_leaves=25, learning_rate=0.07, min_child_samples=10,
+        clf_lgb_v = LGBMClassifier(n_estimators=250, num_leaves=31, learning_rate=0.07, min_child_samples=20,
                                    colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
-        clf_xgb_v = XGBClassifier(n_estimators=300, max_depth=6, learning_rate=0.05, subsample=0.80,
+        clf_xgb_v = XGBClassifier(n_estimators=250, max_depth=6, learning_rate=0.06, subsample=0.80,
                                   colsample_bytree=0.75, tree_method='hist', random_state=seed+fold, n_jobs=-1)
-        clf_cat_v = CatBoostClassifier(iterations=350, depth=6, learning_rate=0.06, l2_leaf_reg=3,
+        clf_cat_v = CatBoostClassifier(iterations=250, depth=6, learning_rate=0.07, l2_leaf_reg=3,
                                        random_seed=seed+fold, verbose=0, thread_count=-1)
-        clf_et_v = ExtraTreesClassifier(n_estimators=300, max_depth=18, min_samples_split=3, random_state=seed+fold, n_jobs=-1)
+        clf_et_v = ExtraTreesClassifier(n_estimators=150, max_depth=16, min_samples_split=5, bootstrap=True, max_samples=0.5, random_state=seed+fold, n_jobs=-1)
         
         clf_lgb_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
         clf_xgb_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
@@ -162,13 +168,13 @@ for seed in seeds:
     for fold, (tr_vi, val_vi) in enumerate(skf_vi.split(X_video_sub, y_video_sub)):
         orig_val_idx_vi = np.where(video_mask_all)[0][val_vi]
         
-        clf_lgb_vi = LGBMClassifier(n_estimators=300, num_leaves=25, learning_rate=0.07, min_child_samples=10,
+        clf_lgb_vi = LGBMClassifier(n_estimators=250, num_leaves=31, learning_rate=0.07, min_child_samples=20,
                                     colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
-        clf_xgb_vi = XGBClassifier(n_estimators=300, max_depth=6, learning_rate=0.05, subsample=0.80,
+        clf_xgb_vi = XGBClassifier(n_estimators=250, max_depth=6, learning_rate=0.06, subsample=0.80,
                                    colsample_bytree=0.75, tree_method='hist', random_state=seed+fold, n_jobs=-1)
-        clf_cat_vi = CatBoostClassifier(iterations=350, depth=6, learning_rate=0.06, l2_leaf_reg=3,
+        clf_cat_vi = CatBoostClassifier(iterations=250, depth=6, learning_rate=0.07, l2_leaf_reg=3,
                                         random_seed=seed+fold, verbose=0, thread_count=-1)
-        clf_et_vi = ExtraTreesClassifier(n_estimators=300, max_depth=18, min_samples_split=3, random_state=seed+fold, n_jobs=-1)
+        clf_et_vi = ExtraTreesClassifier(n_estimators=150, max_depth=16, min_samples_split=5, bootstrap=True, max_samples=0.5, random_state=seed+fold, n_jobs=-1)
         
         clf_lgb_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
         clf_xgb_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
@@ -214,8 +220,8 @@ test_zm_res = np.zeros(len(test_raw))
 
 skf_zm = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 for tr, val in skf_zm.split(X_zm, y_zm):
-    clf_zm = LGBMClassifier(n_estimators=250, max_depth=5, learning_rate=0.05,
-                            min_child_samples=5, random_state=42, verbosity=-1, n_jobs=-1)
+    clf_zm = LGBMClassifier(n_estimators=200, max_depth=5, learning_rate=0.06,
+                            min_child_samples=20, random_state=42, verbosity=-1, n_jobs=-1)
     clf_zm.fit(X_zm[tr], y_zm[tr])
     oof_zm_res[val] = clf_zm.predict_proba(X_zm[val])[:, 1]
     test_zm_res += clf_zm.predict_proba(X_fused_test)[:, 1] / 5.0
@@ -238,8 +244,8 @@ test_zd_res = np.zeros(len(test_raw))
 
 skf_zd = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 for tr, val in skf_zd.split(X_zd, y_zd):
-    clf_zd = LGBMClassifier(n_estimators=250, max_depth=5, learning_rate=0.05,
-                            min_child_samples=5, random_state=42, verbosity=-1, n_jobs=-1)
+    clf_zd = LGBMClassifier(n_estimators=200, max_depth=5, learning_rate=0.06,
+                            min_child_samples=20, random_state=42, verbosity=-1, n_jobs=-1)
     clf_zd.fit(X_zd[tr], y_zd[tr])
     oof_zd_res[val] = clf_zd.predict_proba(X_zd[val])[:, 1]
     test_zd_res += clf_zd.predict_proba(X_fused_test)[:, 1] / 5.0
@@ -284,8 +290,6 @@ plt.savefig("results/confusion_matrix.png", dpi=300)
 plt.close()
 
 tta_test_probs = np.zeros((len(test_raw), n_classes))
-time_idx = [0, 2, 4, 6, 8]
-len_idx = [1, 3, 5, 7, 9]
 
 for tta_pass in range(5):
     test_j_df = test_raw.copy()
@@ -296,9 +300,7 @@ for tta_pass in range(5):
             test_j_df[f"packet_length_{k}"] = np.clip(test_j_df[f"packet_length_{k}"] + np.random.choice([-1, 0, 1], size=len(test_raw)), 28, 1500)
     test_j_fe = extract_transport_features(test_j_df)
     test_j_seq = build_sequence_tensor(test_j_df)
-    with torch.no_grad():
-        test_j_emb, _ = gru_model(torch.tensor(test_j_seq, dtype=torch.float32).to(device))
-        test_j_emb = test_j_emb.cpu().numpy()
+    test_j_emb = get_embeddings_batched(gru_model, test_j_seq, batch_size=4096)
     X_j_test = np.hstack([test_j_fe[selected_feats].values, test_j_emb])
     
     pass_probs = test_fused_10c * best_weights
