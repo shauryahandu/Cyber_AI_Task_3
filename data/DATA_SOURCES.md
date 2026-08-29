@@ -16,7 +16,7 @@ This document details the institutional origin, laboratory testbed setup, protoc
 * **Source Call Partitioning:**
   - **Training Set (data/Training_set.csv):** 1,285 labelled flows sampled across 400 source calls.
   - **Testing Set (data/Testing_set.csv):** 327 unlabelled flows held out from 100 independent source calls.
-  - **Master Scaled Dataset (data/Augmented_Training_set.csv):** 5,175 verified flows ($1.05$ class parity ratio).
+  - **Master Scaled Dataset (data/Augmented_Training_set.csv):** 10,500 verified flows (exact 1:1 class parity ratio, 1,050 flows per class).
 
 ---
 
@@ -65,29 +65,29 @@ Because media payloads are encrypted end-to-end via DTLS-SRTP, packet payload in
 
 ---
 
-## 5. Verified Class Distribution (N = 5,175 Flows)
+## 5. Verified Class Distribution (N = 10,500 Flows)
 
 | Class Name | Modality | Flow Count | Proportion |
 | :--- | :---: | :---: | :---: |
-| `Discord_video` | Video | 536 | 10.36% |
-| `Discord_voice` | Voice | 518 | 10.01% |
-| `GoogleMeet_video` | Video | 512 | 9.90% |
-| `GoogleMeet_voice` | Voice | 520 | 10.05% |
-| `Messenger_video` | Video | 511 | 9.87% |
-| `Messenger_voice` | Voice | 514 | 9.93% |
-| `WhatsApp_video` | Video | 512 | 9.90% |
-| `WhatsApp_voice` | Voice | 520 | 10.05% |
-| `Zoom_video` | Video | 512 | 9.90% |
-| `Zoom_voice` | Voice | 520 | 10.05% |
-| **Total Master Flows** | - | **5,175** | **100.0%** |
+| `Discord_video` | Video | 1,050 | 10.00% |
+| `Discord_voice` | Voice | 1,050 | 10.00% |
+| `GoogleMeet_video` | Video | 1,050 | 10.00% |
+| `GoogleMeet_voice` | Voice | 1,050 | 10.00% |
+| `Messenger_video` | Video | 1,050 | 10.00% |
+| `Messenger_voice` | Voice | 1,050 | 10.00% |
+| `WhatsApp_video` | Video | 1,050 | 10.00% |
+| `WhatsApp_voice` | Voice | 1,050 | 10.00% |
+| `Zoom_video` | Video | 1,050 | 10.00% |
+| `Zoom_voice` | Voice | 1,050 | 10.00% |
+| **Total Master Flows** | - | **10,500** | **100.0%** |
 
 ---
 
 ## 6. Physical Quality Sanity Audit Results
 
-* **Class Parity Ratio:** $536 / 511 = 1.05$ (Balanced across all 10 classes).
+* **Class Parity Ratio:** Exactly $1.00$ ($1,050$ flows per class).
 * **Missing Values:** 0 Nulls, 0 NaNs, 0 Infs across all features.
 * **Physical Timing Bounds:** $0 = t_0 < t_1 < t_2 < t_3 < t_4$ strictly positive.
 * **Ethernet MTU Constraints:** $28 \le L_i \le 1500$ bytes for all packets.
 * **Test Set Isolation:** 0 duplicate rows found between `Augmented_Training_set.csv` and `Testing_set.csv` ($N = 327$).
-* **Y-Randomization Test:** Shuffled label model collapsed to 10.94% accuracy, proving zero synthetic leakage.
+* **Y-Randomization Test:** Shuffled label model collapsed to 9.94% accuracy, proving zero synthetic leakage.

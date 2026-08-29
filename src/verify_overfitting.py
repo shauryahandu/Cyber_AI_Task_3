@@ -1,168 +1,102 @@
-import time
-import warnings
 import os
 import pandas as pd
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-from scipy.stats import entropy
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import f1_score, accuracy_score, roc_auc_score
+from sklearn.metrics import f1_score, accuracy_score
 from sklearn.preprocessing import LabelEncoder
-from sklearn.feature_selection import mutual_info_classif
 from lightgbm import LGBMClassifier
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from features import extract_transport_features, build_sequence_tensor
-from model import BiGRUEmbedder
+from features import extract_transport_features
 
-warnings.filterwarnings('ignore')
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+train_df = pd.read_csv("data/Augmented_Training_set.csv")
+test_df = pd.read_csv("data/Testing_set.csv")
 os.makedirs("results", exist_ok=True)
 
-train_raw = pd.read_csv("data/Augmented_Training_set.csv")
-test_raw = pd.read_csv("data/Testing_set.csv")
+train_fe = extract_transport_features(train_df)
+test_fe = extract_transport_features(test_df)
 
-train_fe = extract_transport_features(train_raw)
-test_fe = extract_transport_features(test_raw)
-
-le_all = LabelEncoder()
-y_enc = le_all.fit_transform(train_fe["label"])
-class_names = le_all.classes_
+le = LabelEncoder()
+y_true = le.fit_transform(train_fe["label"])
+class_names = le.classes_
 n_classes = len(class_names)
-N = len(train_raw)
+feature_cols = [c for c in train_fe.columns if c not in ["label", "relative_time_0"]]
+X = train_fe[feature_cols].values
+X_test = test_fe[feature_cols].values
 
-raw_feats = [c for c in train_fe.columns if c not in ["label", "relative_time_0"]]
-corr_matrix = pd.DataFrame(train_fe[raw_feats].values, columns=raw_feats).corr(method='spearman').abs()
-upper_tri = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
-drop_cols = [c for c in upper_tri.columns if any(upper_tri[c] > 0.98)]
-non_coll_feats = [c for c in raw_feats if c not in drop_cols]
+y_permuted = np.random.RandomState(42).permutation(y_true)
+clf_null = LGBMClassifier(n_estimators=100, num_leaves=15, learning_rate=0.1, random_state=42, verbosity=-1, n_jobs=-1)
+skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+null_preds = np.zeros(len(X))
 
-mi_scores = mutual_info_classif(train_fe[non_coll_feats].values, y_enc, random_state=42)
-clf_lgb_s = LGBMClassifier(n_estimators=250, num_leaves=31, learning_rate=0.08, random_state=42, verbosity=-1, n_jobs=-1)
-clf_lgb_s.fit(train_fe[non_coll_feats].values, y_enc)
-imp_comb = (0.5 * (mi_scores / mi_scores.max()) + 0.5 * (clf_lgb_s.feature_importances_ / clf_lgb_s.feature_importances_.max()))
-selected_feats = pd.Series(imp_comb, index=non_coll_feats).sort_values(ascending=False).head(54).index.tolist()
+for tr, val in skf.split(X, y_permuted):
+    clf_null.fit(X[tr], y_permuted[tr])
+    null_preds[val] = np.argmax(clf_null.predict_proba(X[val]), axis=1)
 
-X_seq_train = build_sequence_tensor(train_raw)
-X_seq_test = build_sequence_tensor(test_raw)
+null_f1 = f1_score(y_permuted, null_preds, average='macro')
+null_acc = accuracy_score(y_permuted, null_preds)
 
-gru_model = BiGRUEmbedder().to(device)
-opt_gru = optim.AdamW(gru_model.parameters(), lr=2e-3, weight_decay=1e-4)
-crit_gru = nn.CrossEntropyLoss()
-loader_gru = DataLoader(TensorDataset(torch.tensor(X_seq_train), torch.tensor(y_enc, dtype=torch.long)), batch_size=128, shuffle=True)
-
-gru_model.train()
-for epoch in range(1, 31):
- for bx, by in loader_gru:
- bx, by = bx.to(device), by.to(device)
- opt_gru.zero_grad()
- _, logits = gru_model(bx)
- loss = crit_gru(logits, by)
- loss.backward()
- opt_gru.step()
-
-gru_model.eval()
-with torch.no_grad():
- train_seq_emb, _ = gru_model(torch.tensor(X_seq_train).to(device))
- test_seq_emb, _ = gru_model(torch.tensor(X_seq_test).to(device))
- train_seq_emb = train_seq_emb.cpu().numpy()
- test_seq_emb = test_seq_emb.cpu().numpy()
-
-X_fused_train = np.hstack([train_fe[selected_feats].values, train_seq_emb])
-X_fused_test = np.hstack([test_fe[selected_feats].values, test_seq_emb])
-
-train_scores_f1 = []
-val_scores_f1 = []
 seeds = [42, 100, 2026]
-fold_f1_list = []
+fold_scores = []
+oof_probs = np.zeros((len(X), n_classes))
+test_probs = np.zeros((len(X_test), n_classes))
 
 for seed in seeds:
- skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
- for fold, (tr, val) in enumerate(skf.split(X_fused_train, y_enc)):
- clf_eval = LGBMClassifier(n_estimators=300, num_leaves=31, learning_rate=0.07, min_child_samples=10,
- colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
- clf_eval.fit(X_fused_train[tr], y_enc[tr])
- tr_pred = clf_eval.predict(X_fused_train[tr])
- val_pred = clf_eval.predict(X_fused_train[val])
- tr_f1 = f1_score(y_enc[tr], tr_pred, average='macro')
- v_f1 = f1_score(y_enc[val], val_pred, average='macro')
- train_scores_f1.append(tr_f1)
- val_scores_f1.append(v_f1)
- fold_f1_list.append(v_f1)
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+    for fold, (tr, val) in enumerate(skf.split(X, y_true)):
+        clf = LGBMClassifier(n_estimators=300, num_leaves=31, learning_rate=0.07, min_child_samples=10,
+                             colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
+        clf.fit(X[tr], y_true[tr])
+        val_p = clf.predict_proba(X[val])
+        oof_probs[val] += val_p / float(len(seeds))
+        f1 = f1_score(y_true[val], np.argmax(val_p, axis=1), average='macro')
+        fold_scores.append(f1)
+        test_probs += clf.predict_proba(X_test) / (5.0 * float(len(seeds)))
 
-mean_train_f1 = np.mean(train_scores_f1)
-mean_val_f1 = np.mean(val_scores_f1)
-gen_gap = mean_train_f1 - mean_val_f1
-f1_std = np.std(fold_f1_list)
+fold_std = float(np.std(fold_scores))
+fold_mean = float(np.mean(fold_scores))
 
-np.random.seed(42)
-y_permuted = np.random.permutation(y_enc)
-skf_null = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-oof_null_preds = np.zeros(N)
-for fold, (tr, val) in enumerate(skf_null.split(X_fused_train, y_permuted)):
- clf_null = LGBMClassifier(n_estimators=150, num_leaves=25, learning_rate=0.08, random_state=42+fold, verbosity=-1, n_jobs=-1)
- clf_null.fit(X_fused_train[tr], y_permuted[tr])
- oof_null_preds[val] = clf_null.predict(X_fused_train[val])
+overlap_cols = [f"packet_length_{i}" for i in range(5)] + [f"relative_time_{i}" for i in range(1, 5)]
+train_tuples = set(tuple(x) for x in train_df[overlap_cols].round(6).values)
+test_tuples = set(tuple(x) for x in test_df[overlap_cols].round(6).values)
+leakage_overlap_count = len(train_tuples.intersection(test_tuples))
 
-null_f1 = f1_score(y_permuted, oof_null_preds, average='macro')
-null_acc = accuracy_score(y_permuted, oof_null_preds)
+test_entropy = -np.sum(test_probs * np.log2(np.clip(test_probs, 1e-12, 1.0)), axis=1)
+mean_entropy = float(np.mean(test_entropy))
+low_entropy_pct = float(np.mean(test_entropy < 1.0) * 100.0)
 
-X_adv_all = np.vstack([X_fused_train, X_fused_test])
-y_adv_all = np.hstack([np.zeros(N), np.ones(len(test_raw))])
-skf_adv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-adv_oof = np.zeros(len(X_adv_all))
-for fold, (tr, val) in enumerate(skf_adv.split(X_adv_all, y_adv_all)):
- clf_adv = LGBMClassifier(n_estimators=100, num_leaves=15, learning_rate=0.05, colsample_bytree=0.70, random_state=42+fold, verbosity=-1, n_jobs=-1)
- clf_adv.fit(X_adv_all[tr], y_adv_all[tr])
- adv_oof[val] = clf_adv.predict_proba(X_adv_all[val])[:, 1]
+train_preds_full = np.argmax(clf.predict_proba(X), axis=1)
+train_f1 = f1_score(y_true, train_preds_full, average='macro')
+val_f1 = f1_score(y_true, np.argmax(oof_probs, axis=1), average='macro')
+gen_gap = float(train_f1 - val_f1)
 
-adv_auc = roc_auc_score(y_adv_all, adv_oof)
-
-sub_df = pd.read_csv("results/predictions.csv")
-prob_cols = [c for c in sub_df.columns if c.startswith("Prob_")]
-test_probs = sub_df[prob_cols].values
-pred_entropies = np.array([entropy(p, base=2) for p in test_probs])
-mean_test_entropy = np.mean(pred_entropies)
-
-print(f"Train Macro-F1: {mean_train_f1:.4f}")
-print(f"Validation Macro-F1: {mean_val_f1:.4f}")
-print(f"Generalization Gap: {gen_gap:.4f}")
-print(f"Permuted Label Macro-F1: {null_f1:.4f}")
-print(f"Fold Variance Standard Deviation: {f1_std:.4f}")
-print(f"Adversarial Validation AUC: {adv_auc:.4f}")
-print(f"Mean Test Prediction Entropy: {mean_test_entropy:.4f}")
+print(f"Y-Randomization Null F1: {null_f1:.4f} (Accuracy: {null_acc*100:.2f}%)")
+print(f"15-Fold Stability Variance: Mean F1 = {fold_mean:.4f}, Std = {fold_std:.4f}")
+print(f"Train-Test Contamination: {leakage_overlap_count} overlapping rows")
+print(f"Test Shannon Entropy: Mean = {mean_entropy:.4f} bits, Low Entropy (<1.0 bit) = {low_entropy_pct:.1f}%")
+print(f"Train-Val Generalization Gap: Train F1 = {train_f1:.4f}, Val F1 = {val_f1:.4f}, Gap = {gen_gap:.4f}")
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-axes[0].bar(range(1, 16), fold_f1_list, color='#2563eb', edgecolor='#1e40af')
-axes[0].axhline(mean_val_f1, color='#ef4444', linestyle='--', label=f'Mean F1 = {mean_val_f1:.4f}')
-axes[0].set_ylim(0.80, 0.95)
-axes[0].set_xlabel('Cross-Validation Fold Index (15 Folds across 3 Seeds)', fontsize=10)
+axes[0].plot(range(1, len(fold_scores) + 1), fold_scores, marker='o', color='#2563eb', linewidth=2)
+axes[0].axhline(fold_mean, color='red', linestyle='--', label=f'Mean F1: {fold_mean:.4f}')
+axes[0].fill_between(range(1, len(fold_scores) + 1), fold_mean - fold_std, fold_mean + fold_std, color='#2563eb', alpha=0.15)
+axes[0].set_title('15-Fold Validation Stability', fontsize=11)
+axes[0].set_xlabel('Fold Index', fontsize=10)
 axes[0].set_ylabel('Macro-F1 Score', fontsize=10)
-axes[0].set_title('15-Fold Model Stability and Variance', fontsize=11)
-axes[0].legend(loc='lower right')
+axes[0].legend()
+axes[0].grid(True, linestyle=':', alpha=0.6)
 
-sns.histplot(pred_entropies, bins=25, kde=True, color='#10b981', ax=axes[1])
-axes[1].set_xlabel('Prediction Entropy (bits)', fontsize=10)
-axes[1].set_ylabel('Flow Count', fontsize=10)
-axes[1].set_title('Test Set Prediction Entropy Distribution (N = 327)', fontsize=11)
+sns.histplot(test_entropy, bins=25, kde=True, color='#059669', ax=axes[1])
+axes[1].axvline(mean_entropy, color='red', linestyle='--', label=f'Mean Entropy: {mean_entropy:.2f} bits')
+axes[1].set_title('Unseen Test Prediction Shannon Entropy Distribution', fontsize=11)
+axes[1].set_xlabel('Shannon Entropy (bits)', fontsize=10)
+axes[1].set_ylabel('Test Flow Count', fontsize=10)
+axes[1].legend()
+axes[1].grid(True, linestyle=':', alpha=0.6)
 
 plt.tight_layout()
-plt.savefig('results/overfitting_audit_charts.png', dpi=300)
+plt.savefig("results/overfitting_audit_charts.png", dpi=300, bbox_inches='tight')
 plt.close()
-
-with open('results/OVERFITTING_AUDIT.md', 'w') as fp:
- fp.write('# 6-Point Overfitting and Generalization Audit Report\n\n')
- fp.write('| Audit Check | Forensic Metric | Result | Audit Status |\n')
- fp.write('| :--- | :---: | :---: | :---: |\n')
- fp.write(f'| **1. Train-Val Generalization Gap** | Train F1 = {mean_train_f1:.4f}, Val F1 = {mean_val_f1:.4f} | Delta = {gen_gap:.4f} | **PASSED (< 0.15)** |\n')
- fp.write(f'| **2. Y-Randomization Null Test** | Permuted Macro-F1 | {null_f1:.4f} | **PASSED (Collapsed to chance)** |\n')
- fp.write(f'| **3. 15-Fold Stability Variance** | Fold Standard Deviation | Sigma = {f1_std:.4f} | **PASSED (< 0.015)** |\n')
- fp.write(f'| **4. Modality Router Accuracy** | 15-Fold Binary CV | 96.12% | **PASSED (Robust Gating)** |\n')
- fp.write(f'| **5. Test Prediction Entropy** | Mean Entropy | {mean_test_entropy:.4f} bits | **PASSED (High Confidence)** |\n')
- fp.write(f'| **6. Data Contamination Audit** | Train-Test Flow Overlap | 0 Duplicate Rows | **PASSED (Zero Contamination)** |\n\n')
- fp.write('## Summary\n')
- fp.write('All 6 forensic checkpoints confirm that the Hierarchical Multi-View Stacking pipeline is mathematically robust, free of label leakage, and properly regularized for out-of-sample test generalizability.\n')
