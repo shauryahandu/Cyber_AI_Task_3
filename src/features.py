@@ -69,6 +69,17 @@ def extract_transport_features(df: pd.DataFrame) -> pd.DataFrame:
     var = np.sum(s_diff**2, axis=1) + 1e-9
     df["autocorr_lag1"] = np.sum(s_diff[:, :4] * s_diff[:, 1:], axis=1) / var
     df["autocorr_lag2"] = np.sum(s_diff[:, :3] * s_diff[:, 2:], axis=1) / var
+
+    t_diff = iat_arr - df["iat_mean"].values[:, None]
+    t_var = np.sum(t_diff**2, axis=1) + 1e-9
+    df["iat_autocorr_lag1"] = np.sum(t_diff[:, :3] * t_diff[:, 1:], axis=1) / t_var
+    df["iat_autocorr_lag2"] = np.sum(t_diff[:, :2] * t_diff[:, 2:], axis=1) / t_var
+
+    iat_accel = np.diff(iat_arr, n=2, axis=1)
+    df["iat_accel_0"] = iat_accel[:, 0]
+    df["iat_accel_1"] = iat_accel[:, 1]
+    df["iat_curvature_ratio"] = np.mean(np.abs(iat_accel), axis=1) / (df["iat_mean"] + 1e-6)
+
     df["pl_gradient_slope"] = (df["packet_length_4"] - df["packet_length_0"]) / 4.0
     df["pl_time_gradient"] = (df["packet_length_4"] - df["packet_length_0"]) / (df["relative_time_4"] + 1e-6)
 
@@ -84,10 +95,18 @@ def extract_transport_features(df: pd.DataFrame) -> pd.DataFrame:
 
     df["pl_mod4_aligned"] = ((pl_arr.astype(int) % 4) == 0).sum(axis=1) / 5.0
     df["pl_mod8_aligned"] = ((pl_arr.astype(int) % 8) == 0).sum(axis=1) / 5.0
+    df["pl_mod16_aligned"] = ((pl_arr.astype(int) % 16) == 0).sum(axis=1) / 5.0
+    df["pl_mod32_aligned"] = ((pl_arr.astype(int) % 32) == 0).sum(axis=1) / 5.0
+
     df["pl_zoom_audio_envelope"] = (((pl_arr >= 106) & (pl_arr <= 118)) | ((pl_arr >= 78) & (pl_arr <= 86))).sum(axis=1) / 5.0
     df["pl_meet_audio_envelope"] = (((pl_arr >= 210) & (pl_arr <= 255)) | ((pl_arr >= 140) & (pl_arr <= 175))).sum(axis=1) / 5.0
     df["pl_video_slice_ratio"] = (pl_arr > 1150).sum(axis=1) / 5.0
     df["iat_sub_ms_burst_ratio"] = (iat_arr < 0.0006).sum(axis=1) / 4.0
+
+    opus_nodes = np.array([58.0, 64.0, 76.0, 88.0, 96.0, 108.0])
+    dists = np.min(np.abs(pl_arr[:, :, None] - opus_nodes[None, None, :]), axis=2)
+    df["opus_vbr_residual_min"] = np.min(dists, axis=1)
+    df["opus_vbr_residual_mean"] = np.mean(dists, axis=1)
 
     burst_rates = pl_arr[:, 1:] / (iat_arr + 1e-6)
     df["burst_rate_mean"] = np.mean(burst_rates, axis=1)
@@ -102,6 +121,7 @@ def extract_transport_features(df: pd.DataFrame) -> pd.DataFrame:
     df["pld_skew"] = np.nan_to_num(skew(pld_arr, axis=1), nan=0.0)
     df["pld_kurtosis"] = np.nan_to_num(kurtosis(pld_arr, axis=1), nan=0.0)
     df["webrtc_pacing_residual"] = np.mean(np.abs(iat_arr - np.median(iat_arr, axis=1, keepdims=True)), axis=1)
+    df["webrtc_audio_pacing_20ms"] = (np.abs(iat_arr - 0.020) < 0.002).sum(axis=1) / 4.0
     df["zoom_sscr_marker"] = ((pl_arr[:, 0] == 110) | (pl_arr[:, 0] == 82)).astype(float)
     df["meet_stun_keepalive"] = ((pl_arr < 120).sum(axis=1) >= 2).astype(float)
 

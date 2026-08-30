@@ -30,6 +30,27 @@ warnings.filterwarnings('ignore')
 os.makedirs("results", exist_ok=True)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+class SupConLoss(nn.Module):
+    def __init__(self, temperature=0.07):
+        super(SupConLoss, self).__init__()
+        self.temperature = temperature
+
+    def forward(self, features, labels):
+        batch_size = features.shape[0]
+        labels = labels.contiguous().view(-1, 1)
+        mask = torch.eq(labels, labels.T).float().to(features.device)
+        norm_features = F.normalize(features, dim=1)
+        anchor_dot_contrast = torch.div(torch.matmul(norm_features, norm_features.T), self.temperature)
+        logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
+        logits = anchor_dot_contrast - logits_max.detach()
+        logits_mask = torch.scatter(torch.ones_like(mask), 1, torch.arange(batch_size).view(-1, 1).to(features.device), 0)
+        mask = mask * logits_mask
+        exp_logits = torch.exp(logits) * logits_mask
+        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True) + 1e-9)
+        mean_log_prob_pos = (mask * log_prob).sum(1) / (mask.sum(1) + 1e-9)
+        loss = -mean_log_prob_pos.mean()
+        return loss
+
 if os.path.exists("data/Augmented_100k_Training_set.csv.gz"):
     train_raw = pd.read_csv("data/Augmented_100k_Training_set.csv.gz")
 elif os.path.exists("data/Augmented_100k_Training_set.csv"):
@@ -62,26 +83,29 @@ mi_scores = mutual_info_classif(sample_sub[non_coll_feats].values, sample_y, ran
 clf_lgb_s = LGBMClassifier(n_estimators=300, num_leaves=63, learning_rate=0.08, random_state=42, verbosity=-1, n_jobs=-1)
 clf_lgb_s.fit(sample_sub[non_coll_feats].values, sample_y)
 imp_comb = (0.5 * (mi_scores / (mi_scores.max() + 1e-9)) + 0.5 * (clf_lgb_s.feature_importances_ / (clf_lgb_s.feature_importances_.max() + 1e-9)))
-selected_feats = pd.Series(imp_comb, index=non_coll_feats).sort_values(ascending=False).head(70).index.tolist()
+selected_feats = pd.Series(imp_comb, index=non_coll_feats).sort_values(ascending=False).head(80).index.tolist()
 
 X_seq_train = build_sequence_tensor(train_raw)
 X_seq_test = build_sequence_tensor(test_raw)
 
 gru_model = BiGRUEmbedder().to(device)
-criterion = nn.CrossEntropyLoss()
+criterion_ce = nn.CrossEntropyLoss()
+criterion_supcon = SupConLoss(temperature=0.07)
 optimizer = optim.AdamW(gru_model.parameters(), lr=0.003, weight_decay=1e-4)
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=25)
 
 train_dataset = TensorDataset(torch.tensor(X_seq_train, dtype=torch.float32), torch.tensor(y_enc, dtype=torch.long))
-train_loader = DataLoader(train_dataset, batch_size=1024, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=512, shuffle=True)
 
 gru_model.train()
 for epoch in range(25):
     for batch_x, batch_y in train_loader:
         batch_x, batch_y = batch_x.to(device), batch_y.to(device)
         optimizer.zero_grad()
-        _, logits = gru_model(batch_x)
-        loss = criterion(logits, batch_y)
+        emb, logits = gru_model(batch_x)
+        loss_ce = criterion_ce(logits, batch_y)
+        loss_sc = criterion_supcon(emb, batch_y)
+        loss = loss_ce + 0.5 * loss_sc
         loss.backward()
         optimizer.step()
     scheduler.step()
@@ -125,7 +149,7 @@ test_router_probs = np.zeros(len(test_raw))
 for seed in seeds:
     skf_m = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
     for fold, (tr, val) in enumerate(skf_m.split(X_fused_train, y_modality)):
-        clf_r = LGBMClassifier(n_estimators=350, num_leaves=63, max_depth=8, learning_rate=0.06,
+        clf_r = LGBMClassifier(n_estimators=400, num_leaves=63, max_depth=8, learning_rate=0.05,
                                subsample=0.85, colsample_bytree=0.80, random_state=seed+fold, verbosity=-1, n_jobs=-1)
         clf_r.fit(X_fused_train[tr], y_modality[tr])
         oof_router_probs[val] += clf_r.predict_proba(X_fused_train[val])[:, 1] / float(len(seeds))
@@ -146,13 +170,13 @@ for seed in seeds:
     for fold, (tr_v, val_v) in enumerate(skf_v.split(X_voice_sub, y_voice_sub)):
         orig_val_idx = np.where(voice_mask_all)[0][val_v]
         
-        clf_lgb_v = LGBMClassifier(n_estimators=400, num_leaves=127, max_depth=9, learning_rate=0.06, min_child_samples=25,
+        clf_lgb_v = LGBMClassifier(n_estimators=450, num_leaves=127, max_depth=9, learning_rate=0.05, min_child_samples=20,
                                    colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
-        clf_xgb_v = XGBClassifier(n_estimators=400, max_depth=8, learning_rate=0.06, subsample=0.80,
+        clf_xgb_v = XGBClassifier(n_estimators=450, max_depth=8, learning_rate=0.05, subsample=0.85,
                                   colsample_bytree=0.75, tree_method='hist', random_state=seed+fold, n_jobs=-1)
-        clf_cat_v = CatBoostClassifier(iterations=400, depth=7, learning_rate=0.06, l2_leaf_reg=3,
+        clf_cat_v = CatBoostClassifier(iterations=450, depth=7, learning_rate=0.05, l2_leaf_reg=3,
                                        random_seed=seed+fold, verbose=0, thread_count=-1)
-        clf_et_v = ExtraTreesClassifier(n_estimators=300, max_depth=22, min_samples_split=4, bootstrap=True, max_samples=0.65, random_state=seed+fold, n_jobs=-1)
+        clf_et_v = ExtraTreesClassifier(n_estimators=300, max_depth=22, min_samples_split=4, bootstrap=True, max_samples=0.70, random_state=seed+fold, n_jobs=-1)
         
         clf_lgb_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
         clf_xgb_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
@@ -175,13 +199,13 @@ for seed in seeds:
     for fold, (tr_vi, val_vi) in enumerate(skf_vi.split(X_video_sub, y_video_sub)):
         orig_val_idx_vi = np.where(video_mask_all)[0][val_vi]
         
-        clf_lgb_vi = LGBMClassifier(n_estimators=400, num_leaves=127, max_depth=9, learning_rate=0.06, min_child_samples=25,
+        clf_lgb_vi = LGBMClassifier(n_estimators=450, num_leaves=127, max_depth=9, learning_rate=0.05, min_child_samples=20,
                                     colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
-        clf_xgb_vi = XGBClassifier(n_estimators=400, max_depth=8, learning_rate=0.06, subsample=0.80,
+        clf_xgb_vi = XGBClassifier(n_estimators=450, max_depth=8, learning_rate=0.05, subsample=0.85,
                                    colsample_bytree=0.75, tree_method='hist', random_state=seed+fold, n_jobs=-1)
-        clf_cat_vi = CatBoostClassifier(iterations=400, depth=7, learning_rate=0.06, l2_leaf_reg=3,
+        clf_cat_vi = CatBoostClassifier(iterations=450, depth=7, learning_rate=0.05, l2_leaf_reg=3,
                                         random_seed=seed+fold, verbose=0, thread_count=-1)
-        clf_et_vi = ExtraTreesClassifier(n_estimators=300, max_depth=22, min_samples_split=4, bootstrap=True, max_samples=0.65, random_state=seed+fold, n_jobs=-1)
+        clf_et_vi = ExtraTreesClassifier(n_estimators=300, max_depth=22, min_samples_split=4, bootstrap=True, max_samples=0.70, random_state=seed+fold, n_jobs=-1)
         
         clf_lgb_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
         clf_xgb_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
@@ -227,17 +251,21 @@ test_zmv_res = np.zeros(len(test_raw))
 
 skf_zmv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 for tr, val in skf_zmv.split(X_zmv, y_zmv):
-    clf_zmv = CatBoostClassifier(iterations=350, depth=6, learning_rate=0.06, l2_leaf_reg=4, random_seed=42, verbose=0, thread_count=-1)
-    clf_zmv.fit(X_zmv[tr], y_zmv[tr])
-    oof_zmv_res[val] = clf_zmv.predict_proba(X_zmv[val])[:, 1]
-    test_zmv_res += clf_zmv.predict_proba(X_fused_test)[:, 1] / 5.0
+    clf_zmv_c = CatBoostClassifier(iterations=400, depth=6, learning_rate=0.05, l2_leaf_reg=4, random_seed=42, verbose=0, thread_count=-1)
+    clf_zmv_l = LGBMClassifier(n_estimators=400, num_leaves=63, max_depth=7, learning_rate=0.05, min_child_samples=20, random_state=42, verbosity=-1, n_jobs=-1)
+    clf_zmv_c.fit(X_zmv[tr], y_zmv[tr])
+    clf_zmv_l.fit(X_zmv[tr], y_zmv[tr])
+    p_val_zmv = 0.55 * clf_zmv_c.predict_proba(X_zmv[val])[:, 1] + 0.45 * clf_zmv_l.predict_proba(X_zmv[val])[:, 1]
+    oof_zmv_res[val] = p_val_zmv
+    p_test_zmv = 0.55 * clf_zmv_c.predict_proba(X_fused_test)[:, 1] + 0.45 * clf_zmv_l.predict_proba(X_fused_test)[:, 1]
+    test_zmv_res += p_test_zmv / 5.0
 
 zmv_orig_idx = np.where(mask_zoom_meet_v)[0]
-oof_fused_10c[zmv_orig_idx, idx_zoom_v] = 0.55 * oof_fused_10c[zmv_orig_idx, idx_zoom_v] + 0.45 * oof_zmv_res
-oof_fused_10c[zmv_orig_idx, idx_meet_v] = 0.55 * oof_fused_10c[zmv_orig_idx, idx_meet_v] + 0.45 * (1.0 - oof_zmv_res)
+oof_fused_10c[zmv_orig_idx, idx_zoom_v] = 0.50 * oof_fused_10c[zmv_orig_idx, idx_zoom_v] + 0.50 * oof_zmv_res
+oof_fused_10c[zmv_orig_idx, idx_meet_v] = 0.50 * oof_fused_10c[zmv_orig_idx, idx_meet_v] + 0.50 * (1.0 - oof_zmv_res)
 
-test_fused_10c[:, idx_zoom_v] = 0.55 * test_fused_10c[:, idx_zoom_v] + 0.45 * test_zmv_res
-test_fused_10c[:, idx_meet_v] = 0.55 * test_fused_10c[:, idx_meet_v] + 0.45 * (1.0 - test_zmv_res)
+test_fused_10c[:, idx_zoom_v] = 0.50 * test_fused_10c[:, idx_zoom_v] + 0.50 * test_zmv_res
+test_fused_10c[:, idx_meet_v] = 0.50 * test_fused_10c[:, idx_meet_v] + 0.50 * (1.0 - test_zmv_res)
 
 idx_zoom_vc = np.where(class_names == "Zoom_voice")[0][0]
 idx_meet_vc = np.where(class_names == "GoogleMeet_voice")[0][0]
@@ -250,17 +278,21 @@ test_zmvc_res = np.zeros(len(test_raw))
 
 skf_zmvc = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 for tr, val in skf_zmvc.split(X_zmvc, y_zmvc):
-    clf_zmvc = CatBoostClassifier(iterations=350, depth=6, learning_rate=0.06, l2_leaf_reg=4, random_seed=42, verbose=0, thread_count=-1)
-    clf_zmvc.fit(X_zmvc[tr], y_zmvc[tr])
-    oof_zmvc_res[val] = clf_zmvc.predict_proba(X_zmvc[val])[:, 1]
-    test_zmvc_res += clf_zmvc.predict_proba(X_fused_test)[:, 1] / 5.0
+    clf_zmvc_c = CatBoostClassifier(iterations=400, depth=6, learning_rate=0.05, l2_leaf_reg=4, random_seed=42, verbose=0, thread_count=-1)
+    clf_zmvc_l = LGBMClassifier(n_estimators=400, num_leaves=63, max_depth=7, learning_rate=0.05, min_child_samples=20, random_state=42, verbosity=-1, n_jobs=-1)
+    clf_zmvc_c.fit(X_zmvc[tr], y_zmvc[tr])
+    clf_zmvc_l.fit(X_zmvc[tr], y_zmvc[tr])
+    p_val_zmvc = 0.55 * clf_zmvc_c.predict_proba(X_zmvc[val])[:, 1] + 0.45 * clf_zmvc_l.predict_proba(X_zmvc[val])[:, 1]
+    oof_zmvc_res[val] = p_val_zmvc
+    p_test_zmvc = 0.55 * clf_zmvc_c.predict_proba(X_fused_test)[:, 1] + 0.45 * clf_zmvc_l.predict_proba(X_fused_test)[:, 1]
+    test_zmvc_res += p_test_zmvc / 5.0
 
 zmvc_orig_idx = np.where(mask_zoom_meet_vc)[0]
-oof_fused_10c[zmvc_orig_idx, idx_zoom_vc] = 0.55 * oof_fused_10c[zmvc_orig_idx, idx_zoom_vc] + 0.45 * oof_zmvc_res
-oof_fused_10c[zmvc_orig_idx, idx_meet_vc] = 0.55 * oof_fused_10c[zmvc_orig_idx, idx_meet_vc] + 0.45 * (1.0 - oof_zmvc_res)
+oof_fused_10c[zmvc_orig_idx, idx_zoom_vc] = 0.50 * oof_fused_10c[zmvc_orig_idx, idx_zoom_vc] + 0.50 * oof_zmvc_res
+oof_fused_10c[zmvc_orig_idx, idx_meet_vc] = 0.50 * oof_fused_10c[zmvc_orig_idx, idx_meet_vc] + 0.50 * (1.0 - oof_zmvc_res)
 
-test_fused_10c[:, idx_zoom_vc] = 0.55 * test_fused_10c[:, idx_zoom_vc] + 0.45 * test_zmvc_res
-test_fused_10c[:, idx_meet_vc] = 0.55 * test_fused_10c[:, idx_meet_vc] + 0.45 * (1.0 - test_zmvc_res)
+test_fused_10c[:, idx_zoom_vc] = 0.50 * test_fused_10c[:, idx_zoom_vc] + 0.50 * test_zmvc_res
+test_fused_10c[:, idx_meet_vc] = 0.50 * test_fused_10c[:, idx_meet_vc] + 0.50 * (1.0 - test_zmvc_res)
 
 idx_disc_vc = np.where(class_names == "Discord_voice")[0][0]
 mask_zoom_disc = ((train_fe["label"] == "Zoom_voice") | (train_fe["label"] == "Discord_voice"))
@@ -272,8 +304,8 @@ test_zd_res = np.zeros(len(test_raw))
 
 skf_zd = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 for tr, val in skf_zd.split(X_zd, y_zd):
-    clf_zd = LGBMClassifier(n_estimators=300, num_leaves=63, max_depth=7, learning_rate=0.06,
-                            min_child_samples=25, random_state=42, verbosity=-1, n_jobs=-1)
+    clf_zd = LGBMClassifier(n_estimators=350, num_leaves=63, max_depth=7, learning_rate=0.05,
+                            min_child_samples=20, random_state=42, verbosity=-1, n_jobs=-1)
     clf_zd.fit(X_zd[tr], y_zd[tr])
     oof_zd_res[val] = clf_zd.predict_proba(X_zd[val])[:, 1]
     test_zd_res += clf_zd.predict_proba(X_fused_test)[:, 1] / 5.0
