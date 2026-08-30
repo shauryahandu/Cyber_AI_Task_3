@@ -12,7 +12,18 @@ import seaborn as sns
 
 from features import extract_transport_features
 
-train_df = pd.read_csv("data/Augmented_Training_set.csv")
+if os.path.exists("data/Augmented_100k_Training_set.csv.gz"):
+    train_df = pd.read_csv("data/Augmented_100k_Training_set.csv.gz")
+elif os.path.exists("data/Augmented_100k_Training_set.csv"):
+    train_df = pd.read_csv("data/Augmented_100k_Training_set.csv")
+elif os.path.exists("data/Augmented_1M_Training_set.csv"):
+    train_df = pd.read_csv("data/Augmented_1M_Training_set.csv")
+else:
+    train_df = pd.read_csv("data/Augmented_Training_set.csv")
+
+if len(train_df) > 50000:
+    train_df = train_df.sample(n=50000, random_state=42).reset_index(drop=True)
+
 test_df = pd.read_csv("data/Testing_set.csv")
 os.makedirs("results", exist_ok=True)
 

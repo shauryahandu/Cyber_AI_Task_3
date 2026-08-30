@@ -1,1 +1,5 @@
 data/Augmented_1M_Training_set.csv
+data/Augmented_100k_Training_set.csv
+catboost_info/
+__pycache__/
+*.pyc

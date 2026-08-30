@@ -30,10 +30,15 @@ warnings.filterwarnings('ignore')
 os.makedirs("results", exist_ok=True)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-if os.path.exists("data/Augmented_1M_Training_set.csv"):
+if os.path.exists("data/Augmented_100k_Training_set.csv.gz"):
+    train_raw = pd.read_csv("data/Augmented_100k_Training_set.csv.gz")
+elif os.path.exists("data/Augmented_100k_Training_set.csv"):
+    train_raw = pd.read_csv("data/Augmented_100k_Training_set.csv")
+elif os.path.exists("data/Augmented_1M_Training_set.csv"):
     train_raw = pd.read_csv("data/Augmented_1M_Training_set.csv")
 else:
     train_raw = pd.read_csv("data/Augmented_Training_set.csv")
+
 test_raw = pd.read_csv("data/Testing_set.csv")
 
 train_fe = extract_transport_features(train_raw)
@@ -45,7 +50,7 @@ class_names = le_all.classes_
 n_classes = len(class_names)
 N = len(train_raw)
 
-sample_sub = train_fe.sample(n=min(100000, N), random_state=42)
+sample_sub = train_fe.sample(n=min(50000, N), random_state=42)
 sample_y = le_all.transform(sample_sub["label"])
 raw_feats = [c for c in train_fe.columns if c not in ["label", "relative_time_0"]]
 corr_matrix = pd.DataFrame(sample_sub[raw_feats].values, columns=raw_feats).corr(method='spearman').abs()
@@ -56,21 +61,22 @@ non_coll_feats = [c for c in raw_feats if c not in drop_cols]
 mi_scores = mutual_info_classif(sample_sub[non_coll_feats].values, sample_y, random_state=42)
 clf_lgb_s = LGBMClassifier(n_estimators=300, num_leaves=63, learning_rate=0.08, random_state=42, verbosity=-1, n_jobs=-1)
 clf_lgb_s.fit(sample_sub[non_coll_feats].values, sample_y)
-imp_comb = (0.5 * (mi_scores / mi_scores.max()) + 0.5 * (clf_lgb_s.feature_importances_ / clf_lgb_s.feature_importances_.max()))
-selected_feats = pd.Series(imp_comb, index=non_coll_feats).sort_values(ascending=False).head(60).index.tolist()
+imp_comb = (0.5 * (mi_scores / (mi_scores.max() + 1e-9)) + 0.5 * (clf_lgb_s.feature_importances_ / (clf_lgb_s.feature_importances_.max() + 1e-9)))
+selected_feats = pd.Series(imp_comb, index=non_coll_feats).sort_values(ascending=False).head(70).index.tolist()
 
 X_seq_train = build_sequence_tensor(train_raw)
 X_seq_test = build_sequence_tensor(test_raw)
 
 gru_model = BiGRUEmbedder().to(device)
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.AdamW(gru_model.parameters(), lr=0.002, weight_decay=1e-4)
+optimizer = optim.AdamW(gru_model.parameters(), lr=0.003, weight_decay=1e-4)
+scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=25)
 
 train_dataset = TensorDataset(torch.tensor(X_seq_train, dtype=torch.float32), torch.tensor(y_enc, dtype=torch.long))
-train_loader = DataLoader(train_dataset, batch_size=2048, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=1024, shuffle=True)
 
 gru_model.train()
-for epoch in range(20):
+for epoch in range(25):
     for batch_x, batch_y in train_loader:
         batch_x, batch_y = batch_x.to(device), batch_y.to(device)
         optimizer.zero_grad()
@@ -78,8 +84,9 @@ for epoch in range(20):
         loss = criterion(logits, batch_y)
         loss.backward()
         optimizer.step()
+    scheduler.step()
 
-def get_embeddings_batched(model, arr, batch_size=4096):
+def get_embeddings_batched(model, arr, batch_size=2048):
     model.eval()
     res = []
     with torch.no_grad():
@@ -89,8 +96,8 @@ def get_embeddings_batched(model, arr, batch_size=4096):
             res.append(emb.cpu().numpy())
     return np.vstack(res)
 
-train_emb = get_embeddings_batched(gru_model, X_seq_train, batch_size=4096)
-test_emb = get_embeddings_batched(gru_model, X_seq_test, batch_size=4096)
+train_emb = get_embeddings_batched(gru_model, X_seq_train, batch_size=2048)
+test_emb = get_embeddings_batched(gru_model, X_seq_test, batch_size=2048)
 
 X_fused_train = np.hstack([train_fe[selected_feats].values, train_emb])
 X_fused_test = np.hstack([test_fe[selected_feats].values, test_emb])
@@ -139,13 +146,13 @@ for seed in seeds:
     for fold, (tr_v, val_v) in enumerate(skf_v.split(X_voice_sub, y_voice_sub)):
         orig_val_idx = np.where(voice_mask_all)[0][val_v]
         
-        clf_lgb_v = LGBMClassifier(n_estimators=350, num_leaves=127, max_depth=9, learning_rate=0.08, min_child_samples=40,
+        clf_lgb_v = LGBMClassifier(n_estimators=400, num_leaves=127, max_depth=9, learning_rate=0.06, min_child_samples=25,
                                    colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
-        clf_xgb_v = XGBClassifier(n_estimators=350, max_depth=8, learning_rate=0.07, subsample=0.80,
+        clf_xgb_v = XGBClassifier(n_estimators=400, max_depth=8, learning_rate=0.06, subsample=0.80,
                                   colsample_bytree=0.75, tree_method='hist', random_state=seed+fold, n_jobs=-1)
-        clf_cat_v = CatBoostClassifier(iterations=350, depth=7, learning_rate=0.08, l2_leaf_reg=3,
+        clf_cat_v = CatBoostClassifier(iterations=400, depth=7, learning_rate=0.06, l2_leaf_reg=3,
                                        random_seed=seed+fold, verbose=0, thread_count=-1)
-        clf_et_v = ExtraTreesClassifier(n_estimators=250, max_depth=20, min_samples_split=4, bootstrap=True, max_samples=0.6, random_state=seed+fold, n_jobs=-1)
+        clf_et_v = ExtraTreesClassifier(n_estimators=300, max_depth=22, min_samples_split=4, bootstrap=True, max_samples=0.65, random_state=seed+fold, n_jobs=-1)
         
         clf_lgb_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
         clf_xgb_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
@@ -168,13 +175,13 @@ for seed in seeds:
     for fold, (tr_vi, val_vi) in enumerate(skf_vi.split(X_video_sub, y_video_sub)):
         orig_val_idx_vi = np.where(video_mask_all)[0][val_vi]
         
-        clf_lgb_vi = LGBMClassifier(n_estimators=350, num_leaves=127, max_depth=9, learning_rate=0.08, min_child_samples=40,
+        clf_lgb_vi = LGBMClassifier(n_estimators=400, num_leaves=127, max_depth=9, learning_rate=0.06, min_child_samples=25,
                                     colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
-        clf_xgb_vi = XGBClassifier(n_estimators=350, max_depth=8, learning_rate=0.07, subsample=0.80,
+        clf_xgb_vi = XGBClassifier(n_estimators=400, max_depth=8, learning_rate=0.06, subsample=0.80,
                                    colsample_bytree=0.75, tree_method='hist', random_state=seed+fold, n_jobs=-1)
-        clf_cat_vi = CatBoostClassifier(iterations=350, depth=7, learning_rate=0.08, l2_leaf_reg=3,
+        clf_cat_vi = CatBoostClassifier(iterations=400, depth=7, learning_rate=0.06, l2_leaf_reg=3,
                                         random_seed=seed+fold, verbose=0, thread_count=-1)
-        clf_et_vi = ExtraTreesClassifier(n_estimators=250, max_depth=20, min_samples_split=4, bootstrap=True, max_samples=0.6, random_state=seed+fold, n_jobs=-1)
+        clf_et_vi = ExtraTreesClassifier(n_estimators=300, max_depth=22, min_samples_split=4, bootstrap=True, max_samples=0.65, random_state=seed+fold, n_jobs=-1)
         
         clf_lgb_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
         clf_xgb_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
@@ -211,29 +218,50 @@ test_fused_10c = test_fused_10c / (test_fused_10c.sum(axis=1, keepdims=True) + 1
 
 idx_zoom_v = np.where(class_names == "Zoom_video")[0][0]
 idx_meet_v = np.where(class_names == "GoogleMeet_video")[0][0]
-mask_zoom_meet = ((train_fe["label"] == "Zoom_video") | (train_fe["label"] == "GoogleMeet_video"))
-X_zm = X_fused_train[mask_zoom_meet]
-y_zm = (train_fe.loc[mask_zoom_meet, "label"] == "Zoom_video").astype(int).values
+mask_zoom_meet_v = ((train_fe["label"] == "Zoom_video") | (train_fe["label"] == "GoogleMeet_video"))
+X_zmv = X_fused_train[mask_zoom_meet_v]
+y_zmv = (train_fe.loc[mask_zoom_meet_v, "label"] == "Zoom_video").astype(int).values
 
-oof_zm_res = np.zeros(len(X_zm))
-test_zm_res = np.zeros(len(test_raw))
+oof_zmv_res = np.zeros(len(X_zmv))
+test_zmv_res = np.zeros(len(test_raw))
 
-skf_zm = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-for tr, val in skf_zm.split(X_zm, y_zm):
-    clf_zm = LGBMClassifier(n_estimators=300, num_leaves=63, max_depth=7, learning_rate=0.06,
-                            min_child_samples=25, random_state=42, verbosity=-1, n_jobs=-1)
-    clf_zm.fit(X_zm[tr], y_zm[tr])
-    oof_zm_res[val] = clf_zm.predict_proba(X_zm[val])[:, 1]
-    test_zm_res += clf_zm.predict_proba(X_fused_test)[:, 1] / 5.0
+skf_zmv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+for tr, val in skf_zmv.split(X_zmv, y_zmv):
+    clf_zmv = CatBoostClassifier(iterations=350, depth=6, learning_rate=0.06, l2_leaf_reg=4, random_seed=42, verbose=0, thread_count=-1)
+    clf_zmv.fit(X_zmv[tr], y_zmv[tr])
+    oof_zmv_res[val] = clf_zmv.predict_proba(X_zmv[val])[:, 1]
+    test_zmv_res += clf_zmv.predict_proba(X_fused_test)[:, 1] / 5.0
 
-zm_orig_idx = np.where(mask_zoom_meet)[0]
-oof_fused_10c[zm_orig_idx, idx_zoom_v] = 0.60 * oof_fused_10c[zm_orig_idx, idx_zoom_v] + 0.40 * oof_zm_res
-oof_fused_10c[zm_orig_idx, idx_meet_v] = 0.60 * oof_fused_10c[zm_orig_idx, idx_meet_v] + 0.40 * (1.0 - oof_zm_res)
+zmv_orig_idx = np.where(mask_zoom_meet_v)[0]
+oof_fused_10c[zmv_orig_idx, idx_zoom_v] = 0.55 * oof_fused_10c[zmv_orig_idx, idx_zoom_v] + 0.45 * oof_zmv_res
+oof_fused_10c[zmv_orig_idx, idx_meet_v] = 0.55 * oof_fused_10c[zmv_orig_idx, idx_meet_v] + 0.45 * (1.0 - oof_zmv_res)
 
-test_fused_10c[:, idx_zoom_v] = 0.60 * test_fused_10c[:, idx_zoom_v] + 0.40 * test_zm_res
-test_fused_10c[:, idx_meet_v] = 0.60 * test_fused_10c[:, idx_meet_v] + 0.40 * (1.0 - test_zm_res)
+test_fused_10c[:, idx_zoom_v] = 0.55 * test_fused_10c[:, idx_zoom_v] + 0.45 * test_zmv_res
+test_fused_10c[:, idx_meet_v] = 0.55 * test_fused_10c[:, idx_meet_v] + 0.45 * (1.0 - test_zmv_res)
 
 idx_zoom_vc = np.where(class_names == "Zoom_voice")[0][0]
+idx_meet_vc = np.where(class_names == "GoogleMeet_voice")[0][0]
+mask_zoom_meet_vc = ((train_fe["label"] == "Zoom_voice") | (train_fe["label"] == "GoogleMeet_voice"))
+X_zmvc = X_fused_train[mask_zoom_meet_vc]
+y_zmvc = (train_fe.loc[mask_zoom_meet_vc, "label"] == "Zoom_voice").astype(int).values
+
+oof_zmvc_res = np.zeros(len(X_zmvc))
+test_zmvc_res = np.zeros(len(test_raw))
+
+skf_zmvc = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+for tr, val in skf_zmvc.split(X_zmvc, y_zmvc):
+    clf_zmvc = CatBoostClassifier(iterations=350, depth=6, learning_rate=0.06, l2_leaf_reg=4, random_seed=42, verbose=0, thread_count=-1)
+    clf_zmvc.fit(X_zmvc[tr], y_zmvc[tr])
+    oof_zmvc_res[val] = clf_zmvc.predict_proba(X_zmvc[val])[:, 1]
+    test_zmvc_res += clf_zmvc.predict_proba(X_fused_test)[:, 1] / 5.0
+
+zmvc_orig_idx = np.where(mask_zoom_meet_vc)[0]
+oof_fused_10c[zmvc_orig_idx, idx_zoom_vc] = 0.55 * oof_fused_10c[zmvc_orig_idx, idx_zoom_vc] + 0.45 * oof_zmvc_res
+oof_fused_10c[zmvc_orig_idx, idx_meet_vc] = 0.55 * oof_fused_10c[zmvc_orig_idx, idx_meet_vc] + 0.45 * (1.0 - oof_zmvc_res)
+
+test_fused_10c[:, idx_zoom_vc] = 0.55 * test_fused_10c[:, idx_zoom_vc] + 0.45 * test_zmvc_res
+test_fused_10c[:, idx_meet_vc] = 0.55 * test_fused_10c[:, idx_meet_vc] + 0.45 * (1.0 - test_zmvc_res)
+
 idx_disc_vc = np.where(class_names == "Discord_voice")[0][0]
 mask_zoom_disc = ((train_fe["label"] == "Zoom_voice") | (train_fe["label"] == "Discord_voice"))
 X_zd = X_fused_train[mask_zoom_disc]
@@ -257,6 +285,9 @@ oof_fused_10c[zd_orig_idx, idx_disc_vc] = 0.60 * oof_fused_10c[zd_orig_idx, idx_
 test_fused_10c[:, idx_zoom_vc] = 0.60 * test_fused_10c[:, idx_zoom_vc] + 0.40 * test_zd_res
 test_fused_10c[:, idx_disc_vc] = 0.60 * test_fused_10c[:, idx_disc_vc] + 0.40 * (1.0 - test_zd_res)
 
+oof_fused_10c = oof_fused_10c / (oof_fused_10c.sum(axis=1, keepdims=True) + 1e-9)
+test_fused_10c = test_fused_10c / (test_fused_10c.sum(axis=1, keepdims=True) + 1e-9)
+
 def f1_loss(weights):
     scaled_oof = oof_fused_10c * weights
     preds = np.argmax(scaled_oof, axis=1)
@@ -265,7 +296,7 @@ def f1_loss(weights):
 best_score = -1.0
 best_weights = np.ones(n_classes)
 
-for init_seed in [42, 100, 2026]:
+for init_seed in [42, 100, 555, 1337, 2026]:
     np.random.seed(init_seed)
     w_start = np.ones(n_classes) + np.random.uniform(-0.1, 0.1, size=n_classes)
     opt_res = minimize(f1_loss, w_start, method="Nelder-Mead", options={"maxiter": 800, "adaptive": True})
@@ -299,7 +330,7 @@ plt.close()
 
 tta_test_probs = np.zeros((len(test_raw), n_classes))
 
-for tta_pass in range(5):
+for tta_pass in range(7):
     test_j_df = test_raw.copy()
     if tta_pass > 0:
         np.random.seed(tta_pass * 100)
@@ -308,11 +339,11 @@ for tta_pass in range(5):
             test_j_df[f"packet_length_{k}"] = np.clip(test_j_df[f"packet_length_{k}"] + np.random.choice([-1, 0, 1], size=len(test_raw)), 28, 1500)
     test_j_fe = extract_transport_features(test_j_df)
     test_j_seq = build_sequence_tensor(test_j_df)
-    test_j_emb = get_embeddings_batched(gru_model, test_j_seq, batch_size=4096)
+    test_j_emb = get_embeddings_batched(gru_model, test_j_seq, batch_size=2048)
     X_j_test = np.hstack([test_j_fe[selected_feats].values, test_j_emb])
     
     pass_probs = test_fused_10c * best_weights
-    tta_test_probs += pass_probs / 5.0
+    tta_test_probs += pass_probs / 7.0
 
 final_test_preds_enc = np.argmax(tta_test_probs, axis=1)
 final_test_labels = class_names[final_test_preds_enc]

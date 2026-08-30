@@ -80,12 +80,30 @@ def extract_transport_features(df: pd.DataFrame) -> pd.DataFrame:
     df["n_video_pkts"] = (pl_arr > 900).sum(axis=1)
     df["n_fast_iat"] = (iat_arr < 0.001).sum(axis=1)
 
+    df["n_opus_dtx"] = ((pl_arr >= 30) & (pl_arr <= 80)).sum(axis=1)
+
     df["pl_mod4_aligned"] = ((pl_arr.astype(int) % 4) == 0).sum(axis=1) / 5.0
     df["pl_mod8_aligned"] = ((pl_arr.astype(int) % 8) == 0).sum(axis=1) / 5.0
     df["pl_zoom_audio_envelope"] = (((pl_arr >= 106) & (pl_arr <= 118)) | ((pl_arr >= 78) & (pl_arr <= 86))).sum(axis=1) / 5.0
     df["pl_meet_audio_envelope"] = (((pl_arr >= 210) & (pl_arr <= 255)) | ((pl_arr >= 140) & (pl_arr <= 175))).sum(axis=1) / 5.0
     df["pl_video_slice_ratio"] = (pl_arr > 1150).sum(axis=1) / 5.0
     df["iat_sub_ms_burst_ratio"] = (iat_arr < 0.0006).sum(axis=1) / 4.0
+
+    burst_rates = pl_arr[:, 1:] / (iat_arr + 1e-6)
+    df["burst_rate_mean"] = np.mean(burst_rates, axis=1)
+    df["burst_rate_max"] = np.max(burst_rates, axis=1)
+    df["burst_rate_std"] = np.std(burst_rates, axis=1)
+    burst_accel = np.diff(burst_rates, axis=1) / (iat_arr[:, 1:] + 1e-6)
+    df["burst_accel_std"] = np.std(burst_accel, axis=1)
+    df["max_burst_energy_ratio"] = np.max(pl_arr, axis=1) / (df["pl_sum"] + 1e-9)
+
+    df["pld_abs_mean"] = np.mean(np.abs(pld_arr), axis=1)
+    df["pld_std"] = np.std(pld_arr, axis=1)
+    df["pld_skew"] = np.nan_to_num(skew(pld_arr, axis=1), nan=0.0)
+    df["pld_kurtosis"] = np.nan_to_num(kurtosis(pld_arr, axis=1), nan=0.0)
+    df["webrtc_pacing_residual"] = np.mean(np.abs(iat_arr - np.median(iat_arr, axis=1, keepdims=True)), axis=1)
+    df["zoom_sscr_marker"] = ((pl_arr[:, 0] == 110) | (pl_arr[:, 0] == 82)).astype(float)
+    df["meet_stun_keepalive"] = ((pl_arr < 120).sum(axis=1) >= 2).astype(float)
 
     for c in iat_cols + ["iat_sum", "iat_mean"]:
         df[f"log_{c}"] = np.log1p(df[c].clip(lower=0))
