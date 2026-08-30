@@ -80,6 +80,13 @@ def extract_transport_features(df: pd.DataFrame) -> pd.DataFrame:
     df["n_video_pkts"] = (pl_arr > 900).sum(axis=1)
     df["n_fast_iat"] = (iat_arr < 0.001).sum(axis=1)
 
+    df["pl_mod4_aligned"] = ((pl_arr.astype(int) % 4) == 0).sum(axis=1) / 5.0
+    df["pl_mod8_aligned"] = ((pl_arr.astype(int) % 8) == 0).sum(axis=1) / 5.0
+    df["pl_zoom_audio_envelope"] = (((pl_arr >= 106) & (pl_arr <= 118)) | ((pl_arr >= 78) & (pl_arr <= 86))).sum(axis=1) / 5.0
+    df["pl_meet_audio_envelope"] = (((pl_arr >= 210) & (pl_arr <= 255)) | ((pl_arr >= 140) & (pl_arr <= 175))).sum(axis=1) / 5.0
+    df["pl_video_slice_ratio"] = (pl_arr > 1150).sum(axis=1) / 5.0
+    df["iat_sub_ms_burst_ratio"] = (iat_arr < 0.0006).sum(axis=1) / 4.0
+
     for c in iat_cols + ["iat_sum", "iat_mean"]:
         df[f"log_{c}"] = np.log1p(df[c].clip(lower=0))
     for c in pl + ["pl_mean", "pl_std", "byte_rate"]:

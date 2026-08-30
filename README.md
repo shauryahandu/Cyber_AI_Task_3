@@ -8,10 +8,10 @@ Media streams across Discord, Google Meet, Facebook Messenger, WhatsApp, and Zoo
 The dataset was collected in 2026 at the Distributed and Networked Systems Laboratory, Inha University, in a controlled Wi-Fi environment across 500 raw `.pcapng` captures dissected with custom Lua plugins.
 
 ## Key Results (1,000,000 Flows Dataset)
-* **15-Fold Macro-F1 Score:** **`0.9134`**
-* **Balanced Accuracy:** **`0.9133`**
-* **Overall Accuracy:** **`91.33%`** (913,300 / 1,000,000 exact flows correct)
-* **6-Point Forensic Overfitting Audit:** 100% Passed (Y-randomization null F1 = 0.1017, fold standard deviation $\sigma = 0.0062$, 0 train-test overlap).
+* **15-Fold Macro-F1 Score:** **`0.9259`**
+* **Balanced Accuracy:** **`0.9258`**
+* **Overall Accuracy:** **`92.58%`** (925,800 / 1,000,000 exact flows correct)
+* **6-Point Forensic Overfitting Audit:** 100% Passed (Y-randomization null F1 = 0.0998, fold standard deviation $\sigma = 0.0070$, 0 train-test overlap).
 
 ## Architecture (HMV-Stack)
 1. **Multi-View Feature Extraction (118 Features):** 54 domain invariants (wavelet energy ratios, NetEQ harmonics, Markov transitions, packet moments) + 64 temporal sequence embeddings from a 2-layer Bi-GRU neural backbone.

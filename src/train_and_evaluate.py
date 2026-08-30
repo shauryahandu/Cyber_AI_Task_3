@@ -45,7 +45,7 @@ class_names = le_all.classes_
 n_classes = len(class_names)
 N = len(train_raw)
 
-sample_sub = train_fe.sample(n=min(50000, N), random_state=42)
+sample_sub = train_fe.sample(n=min(100000, N), random_state=42)
 sample_y = le_all.transform(sample_sub["label"])
 raw_feats = [c for c in train_fe.columns if c not in ["label", "relative_time_0"]]
 corr_matrix = pd.DataFrame(sample_sub[raw_feats].values, columns=raw_feats).corr(method='spearman').abs()
@@ -54,10 +54,10 @@ drop_cols = [c for c in upper_tri.columns if any(upper_tri[c] > 0.98)]
 non_coll_feats = [c for c in raw_feats if c not in drop_cols]
 
 mi_scores = mutual_info_classif(sample_sub[non_coll_feats].values, sample_y, random_state=42)
-clf_lgb_s = LGBMClassifier(n_estimators=250, num_leaves=31, learning_rate=0.08, random_state=42, verbosity=-1, n_jobs=-1)
+clf_lgb_s = LGBMClassifier(n_estimators=300, num_leaves=63, learning_rate=0.08, random_state=42, verbosity=-1, n_jobs=-1)
 clf_lgb_s.fit(sample_sub[non_coll_feats].values, sample_y)
 imp_comb = (0.5 * (mi_scores / mi_scores.max()) + 0.5 * (clf_lgb_s.feature_importances_ / clf_lgb_s.feature_importances_.max()))
-selected_feats = pd.Series(imp_comb, index=non_coll_feats).sort_values(ascending=False).head(54).index.tolist()
+selected_feats = pd.Series(imp_comb, index=non_coll_feats).sort_values(ascending=False).head(60).index.tolist()
 
 X_seq_train = build_sequence_tensor(train_raw)
 X_seq_test = build_sequence_tensor(test_raw)
@@ -70,7 +70,7 @@ train_dataset = TensorDataset(torch.tensor(X_seq_train, dtype=torch.float32), to
 train_loader = DataLoader(train_dataset, batch_size=2048, shuffle=True)
 
 gru_model.train()
-for epoch in range(15):
+for epoch in range(20):
     for batch_x, batch_y in train_loader:
         batch_x, batch_y = batch_x.to(device), batch_y.to(device)
         optimizer.zero_grad()
@@ -118,7 +118,7 @@ test_router_probs = np.zeros(len(test_raw))
 for seed in seeds:
     skf_m = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
     for fold, (tr, val) in enumerate(skf_m.split(X_fused_train, y_modality)):
-        clf_r = LGBMClassifier(n_estimators=250, num_leaves=31, learning_rate=0.06,
+        clf_r = LGBMClassifier(n_estimators=350, num_leaves=63, max_depth=8, learning_rate=0.06,
                                subsample=0.85, colsample_bytree=0.80, random_state=seed+fold, verbosity=-1, n_jobs=-1)
         clf_r.fit(X_fused_train[tr], y_modality[tr])
         oof_router_probs[val] += clf_r.predict_proba(X_fused_train[val])[:, 1] / float(len(seeds))
@@ -139,13 +139,13 @@ for seed in seeds:
     for fold, (tr_v, val_v) in enumerate(skf_v.split(X_voice_sub, y_voice_sub)):
         orig_val_idx = np.where(voice_mask_all)[0][val_v]
         
-        clf_lgb_v = LGBMClassifier(n_estimators=250, num_leaves=31, learning_rate=0.07, min_child_samples=20,
+        clf_lgb_v = LGBMClassifier(n_estimators=350, num_leaves=127, max_depth=9, learning_rate=0.08, min_child_samples=40,
                                    colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
-        clf_xgb_v = XGBClassifier(n_estimators=250, max_depth=6, learning_rate=0.06, subsample=0.80,
+        clf_xgb_v = XGBClassifier(n_estimators=350, max_depth=8, learning_rate=0.07, subsample=0.80,
                                   colsample_bytree=0.75, tree_method='hist', random_state=seed+fold, n_jobs=-1)
-        clf_cat_v = CatBoostClassifier(iterations=250, depth=6, learning_rate=0.07, l2_leaf_reg=3,
+        clf_cat_v = CatBoostClassifier(iterations=350, depth=7, learning_rate=0.08, l2_leaf_reg=3,
                                        random_seed=seed+fold, verbose=0, thread_count=-1)
-        clf_et_v = ExtraTreesClassifier(n_estimators=150, max_depth=16, min_samples_split=5, bootstrap=True, max_samples=0.5, random_state=seed+fold, n_jobs=-1)
+        clf_et_v = ExtraTreesClassifier(n_estimators=250, max_depth=20, min_samples_split=4, bootstrap=True, max_samples=0.6, random_state=seed+fold, n_jobs=-1)
         
         clf_lgb_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
         clf_xgb_v.fit(X_voice_sub[tr_v], y_voice_sub[tr_v])
@@ -168,13 +168,13 @@ for seed in seeds:
     for fold, (tr_vi, val_vi) in enumerate(skf_vi.split(X_video_sub, y_video_sub)):
         orig_val_idx_vi = np.where(video_mask_all)[0][val_vi]
         
-        clf_lgb_vi = LGBMClassifier(n_estimators=250, num_leaves=31, learning_rate=0.07, min_child_samples=20,
+        clf_lgb_vi = LGBMClassifier(n_estimators=350, num_leaves=127, max_depth=9, learning_rate=0.08, min_child_samples=40,
                                     colsample_bytree=0.75, subsample=0.85, random_state=seed+fold, verbosity=-1, n_jobs=-1)
-        clf_xgb_vi = XGBClassifier(n_estimators=250, max_depth=6, learning_rate=0.06, subsample=0.80,
+        clf_xgb_vi = XGBClassifier(n_estimators=350, max_depth=8, learning_rate=0.07, subsample=0.80,
                                    colsample_bytree=0.75, tree_method='hist', random_state=seed+fold, n_jobs=-1)
-        clf_cat_vi = CatBoostClassifier(iterations=250, depth=6, learning_rate=0.07, l2_leaf_reg=3,
+        clf_cat_vi = CatBoostClassifier(iterations=350, depth=7, learning_rate=0.08, l2_leaf_reg=3,
                                         random_seed=seed+fold, verbose=0, thread_count=-1)
-        clf_et_vi = ExtraTreesClassifier(n_estimators=150, max_depth=16, min_samples_split=5, bootstrap=True, max_samples=0.5, random_state=seed+fold, n_jobs=-1)
+        clf_et_vi = ExtraTreesClassifier(n_estimators=250, max_depth=20, min_samples_split=4, bootstrap=True, max_samples=0.6, random_state=seed+fold, n_jobs=-1)
         
         clf_lgb_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
         clf_xgb_vi.fit(X_video_sub[tr_vi], y_video_sub[tr_vi])
@@ -220,18 +220,18 @@ test_zm_res = np.zeros(len(test_raw))
 
 skf_zm = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 for tr, val in skf_zm.split(X_zm, y_zm):
-    clf_zm = LGBMClassifier(n_estimators=200, max_depth=5, learning_rate=0.06,
-                            min_child_samples=20, random_state=42, verbosity=-1, n_jobs=-1)
+    clf_zm = LGBMClassifier(n_estimators=300, num_leaves=63, max_depth=7, learning_rate=0.06,
+                            min_child_samples=25, random_state=42, verbosity=-1, n_jobs=-1)
     clf_zm.fit(X_zm[tr], y_zm[tr])
     oof_zm_res[val] = clf_zm.predict_proba(X_zm[val])[:, 1]
     test_zm_res += clf_zm.predict_proba(X_fused_test)[:, 1] / 5.0
 
 zm_orig_idx = np.where(mask_zoom_meet)[0]
-oof_fused_10c[zm_orig_idx, idx_zoom_v] = 0.65 * oof_fused_10c[zm_orig_idx, idx_zoom_v] + 0.35 * oof_zm_res
-oof_fused_10c[zm_orig_idx, idx_meet_v] = 0.65 * oof_fused_10c[zm_orig_idx, idx_meet_v] + 0.35 * (1.0 - oof_zm_res)
+oof_fused_10c[zm_orig_idx, idx_zoom_v] = 0.60 * oof_fused_10c[zm_orig_idx, idx_zoom_v] + 0.40 * oof_zm_res
+oof_fused_10c[zm_orig_idx, idx_meet_v] = 0.60 * oof_fused_10c[zm_orig_idx, idx_meet_v] + 0.40 * (1.0 - oof_zm_res)
 
-test_fused_10c[:, idx_zoom_v] = 0.65 * test_fused_10c[:, idx_zoom_v] + 0.35 * test_zm_res
-test_fused_10c[:, idx_meet_v] = 0.65 * test_fused_10c[:, idx_meet_v] + 0.35 * (1.0 - test_zm_res)
+test_fused_10c[:, idx_zoom_v] = 0.60 * test_fused_10c[:, idx_zoom_v] + 0.40 * test_zm_res
+test_fused_10c[:, idx_meet_v] = 0.60 * test_fused_10c[:, idx_meet_v] + 0.40 * (1.0 - test_zm_res)
 
 idx_zoom_vc = np.where(class_names == "Zoom_voice")[0][0]
 idx_disc_vc = np.where(class_names == "Discord_voice")[0][0]
@@ -244,27 +244,35 @@ test_zd_res = np.zeros(len(test_raw))
 
 skf_zd = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 for tr, val in skf_zd.split(X_zd, y_zd):
-    clf_zd = LGBMClassifier(n_estimators=200, max_depth=5, learning_rate=0.06,
-                            min_child_samples=20, random_state=42, verbosity=-1, n_jobs=-1)
+    clf_zd = LGBMClassifier(n_estimators=300, num_leaves=63, max_depth=7, learning_rate=0.06,
+                            min_child_samples=25, random_state=42, verbosity=-1, n_jobs=-1)
     clf_zd.fit(X_zd[tr], y_zd[tr])
     oof_zd_res[val] = clf_zd.predict_proba(X_zd[val])[:, 1]
     test_zd_res += clf_zd.predict_proba(X_fused_test)[:, 1] / 5.0
 
 zd_orig_idx = np.where(mask_zoom_disc)[0]
-oof_fused_10c[zd_orig_idx, idx_zoom_vc] = 0.65 * oof_fused_10c[zd_orig_idx, idx_zoom_vc] + 0.35 * oof_zd_res
-oof_fused_10c[zd_orig_idx, idx_disc_vc] = 0.65 * oof_fused_10c[zd_orig_idx, idx_disc_vc] + 0.35 * (1.0 - oof_zd_res)
+oof_fused_10c[zd_orig_idx, idx_zoom_vc] = 0.60 * oof_fused_10c[zd_orig_idx, idx_zoom_vc] + 0.40 * oof_zd_res
+oof_fused_10c[zd_orig_idx, idx_disc_vc] = 0.60 * oof_fused_10c[zd_orig_idx, idx_disc_vc] + 0.40 * (1.0 - oof_zd_res)
 
-test_fused_10c[:, idx_zoom_vc] = 0.65 * test_fused_10c[:, idx_zoom_vc] + 0.35 * test_zd_res
-test_fused_10c[:, idx_disc_vc] = 0.65 * test_fused_10c[:, idx_disc_vc] + 0.35 * (1.0 - test_zd_res)
+test_fused_10c[:, idx_zoom_vc] = 0.60 * test_fused_10c[:, idx_zoom_vc] + 0.40 * test_zd_res
+test_fused_10c[:, idx_disc_vc] = 0.60 * test_fused_10c[:, idx_disc_vc] + 0.40 * (1.0 - test_zd_res)
 
 def f1_loss(weights):
     scaled_oof = oof_fused_10c * weights
     preds = np.argmax(scaled_oof, axis=1)
     return -f1_score(y_enc, preds, average="macro")
 
-init_w = np.ones(n_classes)
-opt_res = minimize(f1_loss, init_w, method="Nelder-Mead", options={"maxiter": 400})
-best_weights = opt_res.x
+best_score = -1.0
+best_weights = np.ones(n_classes)
+
+for init_seed in [42, 100, 2026]:
+    np.random.seed(init_seed)
+    w_start = np.ones(n_classes) + np.random.uniform(-0.1, 0.1, size=n_classes)
+    opt_res = minimize(f1_loss, w_start, method="Nelder-Mead", options={"maxiter": 800, "adaptive": True})
+    current_score = -opt_res.fun
+    if current_score > best_score:
+        best_score = current_score
+        best_weights = opt_res.x
 
 calib_oof_probs = oof_fused_10c * best_weights
 oof_preds = np.argmax(calib_oof_probs, axis=1)
